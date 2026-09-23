@@ -1,0 +1,35 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Local state and test output
+.pi/
+.claude/
+.cache/
+.tmp/
+tmp/
+temp/
+test-results/
+playwright-report/
+*.log
+*.pid
+*.pid.lock
+
+# Credentials and machine-local configuration
+.env*
+.npmrc
+auth.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
