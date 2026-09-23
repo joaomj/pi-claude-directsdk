@@ -1,0 +1,35 @@
+{
+  "name": "pi-claude-directsdk",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Claude as a Pi model provider through the unmodified Claude Code executable. Pi owns the transcript and tools; the CLI supplies subscription authentication as a model transport.",
+  "license": "MIT",
+  "keywords": ["pi-package"],
+  "engines": {
+    "node": ">=20"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/claude-directsdk/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "allowScripts": {
+    "@google/genai@2.21.0": true,
+    "protobufjs@7.6.6": true
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "0.87.1",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "npm run build && node --test .build/tests/",
+    "test:gate2": "npm run build && node --test .build/tests/cli-fake-upstream.test.js",
+    "test:gateway": "npm run build && node --test .build/tests/gateway-mode.test.js"
+  }
+}
