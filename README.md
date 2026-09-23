@@ -18,6 +18,10 @@ The provider does not execute native tools, manage login, extract credentials, o
 
 The project is in the requirements phase. `PRD.md` defines the outcome, boundaries, and verification gates. No installable provider exists yet.
 
+## Acknowledgments
+
+Inspired by [Hermes Claude Subscription DirectSDK](https://github.com/NousResearch/hermes-plugin-claude-subscription-directsdk).
+
 ## Documentation
 
 - `PRD.md` — product requirements, scope, and verification gates.
