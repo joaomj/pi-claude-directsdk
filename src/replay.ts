@@ -284,5 +284,14 @@ export function prepareHistory(
       "History must end in a nonempty user/tool-result message; assistant prefill is unsupported",
     );
   }
+  // Every historical user frame must not query: only the final frame may
+  // generate, and it keeps the native default. Without this flag the child
+  // runs a turn per historical frame and replay acknowledgment fails.
+  for (let i = 0; i < frames.length - 1; i++) {
+    const frame = frames[i];
+    if (frame?.type === "user") {
+      frame.shouldQuery = false;
+    }
+  }
   return { frames };
 }
