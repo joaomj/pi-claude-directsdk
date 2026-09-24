@@ -160,7 +160,21 @@ export function buildRequestBody(options: {
         throw new Error(`Tool description must be a string: ${name}`);
       }
       if (tool.constrainedSampling) {
-        throw new Error(`Grammar-constrained tools are unsupported: ${name}`);
+        // Best-effort decoding requests ride along unenforced: neither the
+        // Anthropic wire protocol nor the fixed CLI binary offers a
+        // constrained-decoding knob (pi's own Anthropic adapter proceeds the
+        // same way). Malformed native input still fails loudly downstream in
+        // parseToolInput, so this cannot corrupt a call silently. Hard
+        // requirements stay rejected: this transport cannot satisfy them.
+        const sampling = tool.constrainedSampling as { type?: unknown; strict?: unknown };
+        const bestEffort =
+          sampling.type === "json_schema" && sampling.strict === "prefer";
+        if (!bestEffort) {
+          throw new Error(
+            `Strict constrained sampling is unsupported by this transport: ${name}. ` +
+            `Only best-effort (strict "prefer") tools are accepted.`,
+          );
+        }
       }
       // JSON round-trip drops typebox symbols and undefined fields.
       const raw = tool.parameters === undefined ? { type: "object" } : tool.parameters;
