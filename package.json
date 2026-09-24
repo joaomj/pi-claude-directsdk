@@ -28,8 +28,6 @@
   "scripts": {
     "check": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
-    "test": "npm run build && node --test .build/tests/",
-    "test:gate2": "npm run build && node --test .build/tests/cli-fake-upstream.test.js",
-    "test:gateway": "npm run build && node --test .build/tests/gateway-mode.test.js"
+    "test": "npm run build && node --test \".build/tests/**/*.test.js\""
   }
 }

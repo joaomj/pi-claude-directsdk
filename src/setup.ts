@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { AdmissionRelay } from "./admission.js";
 import { LOGIN_HINT, INSTALL_HINT } from "./errors.js";
-import { nativeModel, parseCliVersion } from "./models.js";
+import { nativeModel, parseCliVersion, cliVersionSupported } from "./models.js";
 
 export interface SetupStatus {
   available: boolean;

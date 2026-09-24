@@ -16,7 +16,11 @@ The provider does not execute native tools, manage login, extract credentials, o
 
 ## Status
 
-The project is in the requirements phase. `PRD.md` defines the outcome, boundaries, and verification gates. No installable provider exists yet.
+The provider is implemented and qualified end to end against Claude Code
+2.1.281 (qualified range `>=2.1.263 <2.2.0`, see `QUALIFIED_CLI_RANGE` in
+`src/models.ts`). The e2e suite proves extension loading, the install hint,
+and the full pipeline against a loopback fixture with one admitted upstream
+request per call.
 
 ## Acknowledgments
 
@@ -25,3 +29,12 @@ Inspired by [Hermes Claude Subscription DirectSDK](https://github.com/NousResear
 ## Documentation
 
 - `PRD.md` — product requirements, scope, and verification gates.
+- `PLAN.md` — implementation phases and component map.
+
+## Tests
+
+- `npm test` — offline e2e tests (extension load, missing-CLI hint). Safe for CI.
+- `PI_DIRECTSDK_CLI=/path/to/claude npm test` — also runs the fake-upstream
+  pipeline and abort tests against the real CLI. Loopback only, no cost.
+
+List-price cost metadata is an estimate, not a subscription charge.
