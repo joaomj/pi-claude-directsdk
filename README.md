@@ -1,5 +1,7 @@
 # Pi Claude DirectSDK
 
+[![npm version](https://img.shields.io/npm/v/pi-claude-directsdk.svg)](https://www.npmjs.com/package/pi-claude-directsdk)
+
 Use Claude inside Pi through the unmodified Claude Code executable.
 Pi owns the transcript, tools, approvals, and retries; the CLI supplies
 subscription authentication as a model transport. One Pi model call spawns
