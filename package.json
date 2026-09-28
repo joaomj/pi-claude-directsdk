@@ -4,7 +4,25 @@
   "type": "module",
   "description": "Claude as a Pi model provider through the unmodified Claude Code executable. Pi owns the transcript and tools; the CLI supplies subscription authentication as a model transport.",
   "license": "MIT",
-  "keywords": ["pi-package"],
+  "author": "Joao Marcos",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joaomj/pi-claude-directsdk.git"
+  },
+  "homepage": "https://github.com/joaomj/pi-claude-directsdk#readme",
+  "bugs": {
+    "url": "https://github.com/joaomj/pi-claude-directsdk/issues"
+  },
+  "keywords": ["pi-package", "pi", "extension", "claude", "claude-code", "model-provider"],
+  "files": [
+    "extensions/**/*",
+    "src/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
