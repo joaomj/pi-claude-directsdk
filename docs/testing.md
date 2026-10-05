@@ -61,3 +61,7 @@ The grammar check uses the real CLI with fixture credentials and a loopback upst
 Qualified: offline e2e, loopback pipeline against CLI 2.1.281, gateway runs against Opus 5.5, and live subscription runs (text, Pi-side tool execution, cancel cleanup, ~92% follow-up cache reads, 5-round tool chaining, session resume).
 
 Re-run the fake-upstream gate before widening `QUALIFIED_CLI_RANGE` in `src/models.ts`.
+
+## Release gate
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`: `npm ci`, `npm run check`, build, and the offline-safe tests (`missing-cli`, `process-lifetime`). The `pi`-binary test (`e2e-01`) stays local-only because clean checkouts lack the binary. On success the workflow checks the tag matches `package.json`, publishes to npm through OIDC trusted publishing, and creates the GitHub Release with generated notes.

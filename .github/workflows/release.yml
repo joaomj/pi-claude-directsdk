@@ -1,0 +1,63 @@
+# Release: tag-driven npm publish plus GitHub Release.
+#
+# Pushing a `v*` tag verifies the build, publishes the package to npm
+# through OIDC trusted publishing (no long-lived token), and creates a
+# GitHub Release with generated notes.
+#
+# One-time npm setup (package already exists on npmjs.com):
+# npmjs.com -> pi-claude-directsdk -> Settings -> Trusted publishing ->
+# GitHub Actions with organization/user `joaomj`, repository
+# `pi-claude-directsdk`, workflow filename `release.yml`, and direct
+# `npm publish` allowed. The workflow file must exist on main first.
+# Requires npm CLI >= 11.5.1 and Node >= 22.14 in the publish job.
+#
+# The gate runs `npm run check` plus the offline-safe tests only.
+# `e2e-01` needs a `pi` binary that clean checkouts lack, so it stays a
+# local opt-in. See docs/testing.md.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # Create the GitHub Release.
+  id-token: write # Required for npm OIDC trusted publishing.
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run check
+      - run: npm run build
+      - run: node --test .build/tests/e2e/missing-cli.test.js .build/tests/e2e/process-lifetime.test.js
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Refuse version mismatch
+        run: |
+          test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}" \
+            || { echo "Tag ${GITHUB_REF_NAME} does not match package.json version"; exit 1; }
+      - run: npm ci
+      - run: npm publish
+      - run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
