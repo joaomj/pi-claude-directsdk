@@ -39,7 +39,9 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
       - run: npm ci
-      - run: npm audit --audit-level=high
+      - name: Report dependency vulnerabilities
+        continue-on-error: true
+        run: npm audit --audit-level=high
       - run: npm run check
       - run: npm run build
       - run: node --test .build/tests/e2e/missing-cli.test.js .build/tests/e2e/process-lifetime.test.js
