@@ -56,12 +56,12 @@ signed-thinking carrier, so resumed turns replay exactly.
 
 ## Tool compatibility
 
-Built-in Pi tools (`read`, `bash`, `edit`, `write`) work. They request
-best-effort (`strict: "prefer"`) constrained decoding, which this transport
-accepts unenforced: neither the Anthropic protocol nor the fixed CLI binary
-offers a decoding knob, matching Pi's own Anthropic adapter. Malformed native
-tool input still fails loudly instead of corrupting a call. Hard requirements
-(`strict: "require"`, `grammar` schemas) stay rejected with an error.
+Built-in Pi tools (`read`, `bash`, `edit`, `write`) and `codemode` are
+accepted. Best-effort JSON-schema constraints (`strict: "prefer"`) and
+provider-specific grammar variants fall back to normal JSON-schema tool
+calling, matching Pi's Anthropic adapter. This transport does not enforce
+constrained decoding. Malformed native tool input still fails with an error.
+Required strict schemas (`strict: "require"`) remain rejected.
 
 ## Tests
 

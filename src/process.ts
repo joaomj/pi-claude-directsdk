@@ -77,8 +77,8 @@ export function spawnSupervised(options: {
     detached: true,
     windowsHide: true,
   });
-  // The supervisor must never keep the Pi process alive on its own.
-  proc.unref();
+  // Keep Pi alive until the request-scoped child closes. One-shot callers
+  // must receive final usage and tool calls before the process can exit.
 
   const queue: string[] = [];
   const waiters: Array<{

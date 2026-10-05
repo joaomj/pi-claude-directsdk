@@ -160,19 +160,19 @@ export function buildRequestBody(options: {
         throw new Error(`Tool description must be a string: ${name}`);
       }
       if (tool.constrainedSampling) {
-        // Best-effort decoding requests ride along unenforced: neither the
-        // Anthropic wire protocol nor the fixed CLI binary offers a
-        // constrained-decoding knob (pi's own Anthropic adapter proceeds the
-        // same way). Malformed native input still fails loudly downstream in
-        // parseToolInput, so this cannot corrupt a call silently. Hard
-        // requirements stay rejected: this transport cannot satisfy them.
+        // Grammar variants are optional provider-specific encodings. Like
+        // Pi's Anthropic adapter, use the tool's JSON schema when grammar
+        // decoding is unavailable. Best-effort strict schemas also fall back
+        // to normal tool calling; required strict schemas stay rejected.
+        // Malformed native input still fails downstream in parseToolInput.
         const sampling = tool.constrainedSampling as { type?: unknown; strict?: unknown };
         const bestEffort =
-          sampling.type === "json_schema" && sampling.strict === "prefer";
+          sampling.type === "grammar" ||
+          (sampling.type === "json_schema" && sampling.strict === "prefer");
         if (!bestEffort) {
           throw new Error(
             `Strict constrained sampling is unsupported by this transport: ${name}. ` +
-            `Only best-effort (strict "prefer") tools are accepted.`,
+            `Only grammar fallback and best-effort (strict "prefer") tools are accepted.`,
           );
         }
       }
