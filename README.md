@@ -37,9 +37,30 @@ with actionable errors.
   `QUALIFIED_CLI_RANGE` in `src/models.ts`), logged in via `claude auth login`
 - A Claude paid plan for subscription use (the free plan excludes the CLI)
 
+Verified with Pi 1.0.2 and Claude Code 2.1.281.
+
+## Install and activate
+
+Install the qualified Claude Code version and sign in through its official login:
+
+```sh
+npm install -g --ignore-scripts=false @anthropic-ai/claude-code@2.1.281
+claude auth login
+pi install git:github.com/joaomj/pi-claude-directsdk
+pi --model claude-directsdk/haiku
+```
+
+Restart Pi after installation. DirectSDK uses the CLI login, not Pi's Anthropic
+login. The npm command enables the Claude Code installer for this command only.
+
+The model catalog does not guarantee account entitlement. Start with `haiku`
+for a small request. Models marked as requiring usage credits can incur separate
+charges. Disable additional paid usage in your Claude account if you want only
+the included subscription allowance.
+
 ## Use
 
-Load the extension and list models:
+To load a local checkout without installing it, list models:
 
 ```sh
 pi -e ./extensions/claude-directsdk/index.ts --list-models claude-directsdk
@@ -66,7 +87,7 @@ Required strict schemas (`strict: "require"`) remain rejected.
 ## Tests
 
 ```sh
-npm test  # offline e2e: extension load, install hint. Safe for CI.
+npm test  # Offline checks, including one-shot child lifetime. No subscription usage.
 ```
 
 Opt-in suites (never run by default):
@@ -77,6 +98,23 @@ PI_DIRECTSDK_CLI=/path/to/claude npm test
 # Gateway text, tool call, and multi-turn replay via OpenRouter. Paid.
 PI_DIRECTSDK_GATEWAY=1 PI_DIRECTSDK_CLI=/path/to/claude npm test
 ```
+
+### Focused regression checks
+
+```sh
+npm run build
+PI_DIRECTSDK_CLI="$(command -v claude)" node --test \
+  --test-name-pattern='grammar tool|one-shot supervision' \
+  .build/tests/e2e/fake-upstream.test.js \
+  .build/tests/e2e/process-lifetime.test.js
+```
+
+The grammar check uses the real CLI with fixture credentials and a loopback
+upstream. It verifies JSON-schema fallback, tool-call delivery, single-request
+admission, and rejection of required strict decoding before an upstream call.
+The lifetime check runs in a separate process. It verifies that the caller
+receives the child's final exit status after its output streams close.
+Neither check consumes subscription allowance.
 
 ## Costs
 

@@ -4,8 +4,9 @@
  * Runs only when PI_DIRECTSDK_CLI points at a `claude` executable. Spins up
  * a loopback synthetic Anthropic Messages endpoint, runs the real CLI
  * against it with a fixture key in an isolated env, and asserts:
- *   (a) a text prompt streams back to a terminal `done` event, and
- *   (b) exactly one upstream POST /v1/messages is admitted per Pi call.
+ *   (a) a grammar tool uses JSON schema and returns a usable tool call,
+ *   (b) exactly one upstream POST /v1/messages is admitted per Pi call, and
+ *   (c) required strict decoding fails before contacting upstream.
  * A second case holds the upstream open, aborts mid-flight, and asserts the
  * call terminates as `aborted` instead of hanging.
  *
@@ -34,8 +35,20 @@ const CLI = process.env["PI_DIRECTSDK_CLI"];
 const SKIP_REASON =
   "needs PI_DIRECTSDK_CLI=/path/to/claude (real CLI against a loopback fixture)";
 
-function context(): TranscriptContext {
+function context(strict = false): TranscriptContext {
   return normalizeContext({
+    tools: [{
+      name: "codemode",
+      description: "Run JavaScript supplied in code.",
+      parameters: {
+        type: "object",
+        properties: { code: { type: "string" } },
+        required: ["code"],
+      },
+      constrainedSampling: strict
+        ? { type: "json_schema", strict: "require" }
+        : { type: "grammar", variants: { openai_lark: "start: /[\\s\\S]+/" } },
+    }],
     messages: [
       {
         role: "system",
@@ -72,8 +85,8 @@ function sseLine(payload: unknown): string {
   return `data: ${JSON.stringify(payload)}\n\n`;
 }
 
-/** Minimal complete Anthropic text response as server-sent events. */
-function textResponse(text: string): string {
+/** Complete Anthropic text and tool response as server-sent events. */
+function toolResponse(text: string): string {
   return (
     sseLine({
       type: "message_start",
@@ -92,8 +105,17 @@ function textResponse(text: string): string {
     sseLine({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text } }) +
     sseLine({ type: "content_block_stop", index: 0 }) +
     sseLine({
+      type: "content_block_start", index: 1,
+      content_block: { type: "tool_use", id: "toolu_codemode", name: "mcp__pi__codemode", input: {} },
+    }) +
+    sseLine({
+      type: "content_block_delta", index: 1,
+      delta: { type: "input_json_delta", partial_json: JSON.stringify({ code: "return 42;" }) },
+    }) +
+    sseLine({ type: "content_block_stop", index: 1 }) +
+    sseLine({
       type: "message_delta",
-      delta: { stop_reason: "end_turn", stop_sequence: null },
+      delta: { stop_reason: "tool_use", stop_sequence: null },
       usage: { output_tokens: 8 },
     }) +
     sseLine({ type: "message_stop" })
@@ -101,7 +123,7 @@ function textResponse(text: string): string {
 }
 
 test(
-  "e2e-03a: real CLI against a fake upstream streams text with one admitted request",
+  "e2e-03a: grammar tool falls back to JSON schema through the real CLI",
   { timeout: 180_000, skip: CLI ? false : SKIP_REASON },
   async () => {
     let messagePosts = 0;
@@ -119,7 +141,7 @@ test(
             "content-type": "text/event-stream",
             "request-id": "req_e2e_1",
           });
-          res.end(textResponse("Hello from the fake upstream."));
+          res.end(toolResponse("Hello from the fake upstream."));
           return;
         }
         res.writeHead(404, { "content-type": "application/json" });
@@ -140,7 +162,26 @@ test(
         .join("");
       assert.match(text, /Hello from the fake upstream/);
       assert.equal(messagePosts, 1, `expected 1 upstream request, saw ${messagePosts}`);
-      assert.match(bodies[0] ?? "", /"messages"/);
+      const request = JSON.parse(bodies[0] ?? "{}") as {
+        tools: Array<{ name: string; input_schema: unknown }>;
+      };
+      assert.deepEqual(request.tools.find((tool) => tool.name === "mcp__pi__codemode")?.input_schema, {
+        type: "object",
+        properties: { code: { type: "string" } },
+        required: ["code"],
+      });
+      assert.equal(terminal.reason, "toolUse");
+      const call = terminal.message.content.find((block) => block.type === "toolCall");
+      assert.ok(call && call.type === "toolCall");
+      assert.equal(call.name, "codemode");
+      assert.deepEqual(call.arguments, { code: "return 42;" });
+
+      const strict = await collectTerminal(streamClaudeDirectSdk(model(), context(true), {
+        env: fixtureEnv(`http://127.0.0.1:${port}`),
+      }), 30_000);
+      assert.equal(strict.terminal.type, "error");
+      assert.match(strict.terminal.error.errorMessage ?? "", /Strict constrained sampling.*codemode/);
+      assert.equal(messagePosts, 1, "required strict decoding must fail before contacting upstream");
     } finally {
       server.close();
     }
