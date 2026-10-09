@@ -10,8 +10,8 @@ npm test
 
 Coverage by default:
 
-- `provider-list.test.ts` (E2E-01): loads the extension through the real `pi` binary and lists the pinned catalog. Proves provider registration and catalog wiring.
-- `missing-cli.test.ts` (E2E-02): runs `streamSimple` with an empty `PATH` and asserts the install hint. Proves the missing-CLI failure path.
+- `provider-list.test.ts`: loads the extension through the real `pi` binary with isolated configuration. It verifies that Opus 5.5 and the existing aliases remain listed offline. A fixture CLI records any invocation. The test requires zero invocations and failed on the code before the cache-only guard.
+- `missing-cli.test.ts` (E2E-02): runs the registered provider's `streamSimple` with an empty `PATH` and asserts the install hint. Proves the missing-CLI failure path.
 - `process-lifetime.test.ts`: runs outside the test runner and asserts the caller receives the child final exit status after its output streams close.
 
 ## Opt-in suites
@@ -24,7 +24,7 @@ These suites never run by default. Each is gated by an environment variable.
 PI_DIRECTSDK_CLI=/path/to/claude npm test
 ```
 
-`fake-upstream.test.ts` (E2E-03) runs the full pipeline against the real CLI with a loopback synthetic Anthropic Messages endpoint and fixture credentials in an isolated environment. It asserts:
+`fake-upstream.test.ts` (E2E-03) calls the registered provider's `streamSimple`, including lazy loading, and runs the full pipeline against the real CLI with a loopback synthetic Anthropic Messages endpoint and fixture credentials in an isolated environment. It asserts:
 
 1. A grammar tool uses JSON-schema fallback and returns a usable tool call.
 2. Exactly one upstream `POST /v1/messages` is admitted per Pi call.
@@ -55,6 +55,12 @@ PI_DIRECTSDK_CLI="$(command -v claude)" node --test \
 ```
 
 The grammar check uses the real CLI with fixture credentials and a loopback upstream. It verifies JSON-schema fallback, tool-call delivery, single-request admission, and rejection of required strict decoding before an upstream call. The lifetime check runs in a separate process. It verifies that the caller receives the child final exit status after its output streams close. Neither check consumes subscription allowance.
+
+## Startup checks
+
+The startup change passes type-check, build, offline catalog listing, missing-CLI handling, and the loopback pipeline. A separate check loads the extension through managed Pi 1.1.0 and verifies a structured missing-CLI error through the lazy transport. It closes child stdin and checks the JSON error event, not the process exit code. Pi print mode can exit successfully after reporting a model error in that event.
+
+See [startup.md](startup.md) for the readiness benchmark method and results. No paid requests are needed for these checks.
 
 ## Qualification status
 

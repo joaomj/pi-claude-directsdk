@@ -25,7 +25,7 @@ Limits:
 - A Claude paid plan. The free plan excludes the CLI.
 - A Claude Code login via `claude auth login`.
 
-Verified with Pi 1.0.2 and Claude Code 2.1.281.
+Transport qualification uses Pi 1.0.2 and Claude Code 2.1.281. Startup and extension loading are also verified with Pi 1.1.0. Those startup checks make no paid requests.
 
 ## Install
 
@@ -71,6 +71,8 @@ Run a prompt:
 pi -e ./extensions/claude-directsdk/index.ts -p --model claude-directsdk/sonnet -- "Hello."
 ```
 
+Cache-only initialization uses the pinned catalog without Claude CLI probes. The request transport loads on the first Claude request. See [docs/startup.md](docs/startup.md) for behavior, measurements, and limits.
+
 ## Configuration
 
 | Setting | Purpose |
@@ -98,6 +100,7 @@ Per-model cost metadata is Anthropic list price. Pi reports it as an estimate, n
 | Document | Contents |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Request lifecycle, model routing, tool transport, admission relay. |
+| [docs/startup.md](docs/startup.md) | Cache-only initialization, lazy loading, and startup measurements. |
 | [docs/testing.md](docs/testing.md) | Offline and opt-in test suites. |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Missing CLI, logged-out CLI, conflicting environment. |
 

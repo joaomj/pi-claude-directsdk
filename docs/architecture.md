@@ -22,9 +22,9 @@ flowchart TD
 
 ### Provider entry (`src/provider.ts`, `extensions/claude-directsdk/index.ts`)
 
-The extension registers provider id `claude-directsdk` with a static pinned catalog (`MODELS`). `refreshModels` merges live picker labels for known routes. Unknown live routes stay unlisted because the provider has no verified cost metadata for them. Any refresh failure keeps the pinned catalog.
+The extension registers provider id `claude-directsdk` with a static pinned catalog (`MODELS`). When `RefreshModelsContext.allowNetwork` is false, `refreshModels` returns `MODELS` without loading discovery code or running CLI probes. When live refresh is allowed, discovery annotates known routes with live picker labels. Unknown live routes stay unlisted because the provider has no verified cost metadata for them. Discovery failures keep the pinned catalog. Module-load errors remain visible to Pi.
 
-`streamSimple` delegates to `streamClaudeDirectSdk` in `src/stream.ts`.
+`streamSimple` uses Pi's `lazyStream` helper to return a stream immediately. The helper loads `src/stream.ts` asynchronously, then forwards events from `streamClaudeDirectSdk`. The provider preserves the model, transcript, and request options. See [startup.md](startup.md) for measurements and limits.
 
 ### History replay (`src/replay.ts`)
 
@@ -88,7 +88,7 @@ The model catalog is pinned in `src/models.ts` (`CATALOG`, `ALIAS_IDS`, `ALIASES
 - Short aliases resolve to canonical native routes.
 - Routes with a 1,000,000-token window take the `[1m]` native suffix. Haiku 4.5 stays un-suffixed.
 - `QUALIFIED_CLI_RANGE` pins the qualified CLI versions. Routing, replay acknowledgments, and admission behavior are version-sensitive. Re-run the fake-upstream gate (see [testing.md](testing.md)) before widening the range.
-- `refreshModels` annotates known pinned routes with live picker labels. Unknown live routes stay unlisted. Any discovery failure keeps the pinned catalog.
+- When live refresh is allowed, `refreshModels` annotates known pinned routes with live picker labels. Unknown live routes stay unlisted. Any discovery failure keeps the pinned catalog.
 
 ## Tool transport
 

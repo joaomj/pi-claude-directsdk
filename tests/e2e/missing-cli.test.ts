@@ -14,8 +14,7 @@ import type {
   TranscriptContext,
 } from "@earendil-works/pi-ai/compat";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
-import { streamClaudeDirectSdk } from "../../src/stream.js";
-import { MODELS } from "../../src/provider.js";
+import { MODELS, streamSimple } from "../../src/provider.js";
 import { INSTALL_HINT } from "../../src/errors.js";
 import { collectTerminal } from "./helpers.js";
 
@@ -57,7 +56,7 @@ test(
   "e2e-02: missing claude binary fails with the install hint",
   { timeout: 60_000 },
   async () => {
-    const stream = streamClaudeDirectSdk(model(), context(), {
+    const stream = streamSimple(model(), context(), {
       env: noCliEnv(),
     });
     const { events, terminal } = await collectTerminal(stream, 30_000);

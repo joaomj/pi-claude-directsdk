@@ -23,8 +23,7 @@ import {
   CONTEXT_WINDOWS,
   PROVIDER_ID,
 } from "./models.js";
-import { discoverModels } from "./setup.js";
-import { streamClaudeDirectSdk } from "./stream.js";
+import { lazyStream } from "@earendil-works/pi-ai/api/lazy";
 
 export { PROVIDER_ID };
 
@@ -71,6 +70,11 @@ export const MODELS: ProviderModelConfig[] = pinnedModels();
 export async function refreshModels(
   context: RefreshModelsContext,
 ): Promise<ProviderModelConfig[]> {
+  // Cache-only refresh must not run CLI discovery before the editor is ready.
+  if (!context.allowNetwork || context.signal.aborted) {
+    return MODELS;
+  }
+  const { discoverModels } = await import("./setup.js");
   if (context.signal.aborted) {
     return MODELS;
   }
@@ -98,5 +102,8 @@ export function streamSimple(
   context: TranscriptContext,
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
-  return streamClaudeDirectSdk(model, context, options);
+  return lazyStream(model, async () => {
+    const { streamClaudeDirectSdk } = await import("./stream.js");
+    return streamClaudeDirectSdk(model, context, options);
+  });
 }

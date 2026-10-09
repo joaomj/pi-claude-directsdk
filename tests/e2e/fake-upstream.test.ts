@@ -27,8 +27,7 @@ import type {
   TranscriptContext,
 } from "@earendil-works/pi-ai/compat";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
-import { streamClaudeDirectSdk } from "../../src/stream.js";
-import { MODELS } from "../../src/provider.js";
+import { MODELS, streamSimple } from "../../src/provider.js";
 import { collectTerminal } from "./helpers.js";
 
 const CLI = process.env["PI_DIRECTSDK_CLI"];
@@ -151,7 +150,7 @@ test(
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as AddressInfo).port;
     try {
-      const stream = streamClaudeDirectSdk(model(), context(), {
+      const stream = streamSimple(model(), context(), {
         env: fixtureEnv(`http://127.0.0.1:${port}`),
       });
       const { terminal } = await collectTerminal(stream, 150_000);
@@ -176,7 +175,7 @@ test(
       assert.equal(call.name, "codemode");
       assert.deepEqual(call.arguments, { code: "return 42;" });
 
-      const strict = await collectTerminal(streamClaudeDirectSdk(model(), context(true), {
+      const strict = await collectTerminal(streamSimple(model(), context(true), {
         env: fixtureEnv(`http://127.0.0.1:${port}`),
       }), 30_000);
       assert.equal(strict.terminal.type, "error");
@@ -212,7 +211,7 @@ test(
     const port = (server.address() as AddressInfo).port;
     try {
       const controller = new AbortController();
-      const stream = streamClaudeDirectSdk(model(), context(), {
+      const stream = streamSimple(model(), context(), {
         env: fixtureEnv(`http://127.0.0.1:${port}`),
         signal: controller.signal,
       });
