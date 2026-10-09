@@ -22,6 +22,7 @@ export const QUALIFIED_CLI_RANGE = ">=2.1.263 <2.2.0";
 export const CONTEXT_WINDOWS: Record<string, number> = {
   "claude-sonnet-5": 1_000_000,
   "claude-haiku-4-5-20251001": 200_000,
+  "claude-haiku-5-5": 200_000,
   "claude-opus-5-5": 1_000_000,
   "claude-opus-5": 1_000_000,
   "claude-opus-4-8": 1_000_000,
@@ -57,10 +58,29 @@ export interface CatalogEntry {
   contextWindow: number;
   /** Declared output cap for Pi display and accounting. */
   maxTokens: number;
-  cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  cost: {
+    input: number; output: number; cacheRead: number; cacheWrite: number;
+    tiers?: Array<{
+      inputTokensAbove: number;
+      input: number; output: number; cacheRead: number; cacheWrite: number;
+    }>;
+  };
 }
 
 export const CATALOG: CatalogEntry[] = [
+  {
+    id: "claude-haiku-5-5",
+    name: "Claude Haiku 5.5 (subscription)",
+    contextWindow: 200_000,
+    maxTokens: 10000,
+    cost: {
+      input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125,
+      tiers: [{
+        inputTokensAbove: 100000,
+        input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625,
+      }],
+    },
+  },
   {
     id: "claude-sonnet-5",
     name: "Claude Sonnet 5 (subscription)",

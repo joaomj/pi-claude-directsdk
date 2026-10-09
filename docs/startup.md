@@ -7,10 +7,20 @@ DirectSDK uses the pinned catalog during cache-only initialization. It does not 
 - When `RefreshModelsContext.allowNetwork` is false, `refreshModels` returns `MODELS` immediately.
 - When live refresh is allowed, `refreshModels` loads `src/setup.ts` and checks cancellation before discovery.
 - Live discovery can still wait for CLI authentication status, version, and picker initialization. These probes make no Messages request.
-- `streamSimple` uses Pi's existing `lazyStream` helper. It loads `src/stream.ts` asynchronously and preserves the transcript and request options.
+- `streamSimple` uses the local `src/lazy-stream.ts` wrapper through Pi's compatibility API. It loads `src/stream.ts` asynchronously and preserves the transcript and request options.
 - Module-load failures are reported as errors. Discovery failures keep the pinned catalog.
 
-The change does not add credential caching or alter CLI-managed authentication. It does not change model routes, aliases, context windows, or prices. The catalog contains six canonical models and five aliases, including Opus 5.5. Removing entries would not avoid the CLI probes that caused the main delay.
+The change does not add credential caching or alter CLI-managed authentication. It does not change model routes, aliases, context windows, or prices. The catalog contains seven canonical models and five aliases, including Opus 5.5. Removing entries would not avoid the CLI probes that caused the main delay.
+
+## Package resolution
+
+The local lazy-stream wrapper imports `@earendil-works/pi-ai/compat`, which Pi resolves for extensions. It does not import `@earendil-works/pi-ai/api/lazy`. That subpath failed to resolve in a managed Pi 1.1.0 installation with no local peer package. The wrapper preserves deferred transport loading and reports setup failures as stream errors. No machine-specific package symlink is required.
+
+## Haiku 5.5
+
+Use the explicit route `claude-directsdk/claude-haiku-5-5`. The catalog entry sets a conservative 200,000-token context limit and a 10,000-token output limit. These are configured caps, not a claim about the model's maximum capacity. The existing `haiku` alias still selects Haiku 4.5.
+
+Cost metadata follows [Anthropic's announcement](https://www.anthropic.com/claude-haiku-5-5). Requests above 100,000 input tokens use the higher published rate for the full request. Account entitlement and live transport behavior require separate verification.
 
 ## Startup measurements
 

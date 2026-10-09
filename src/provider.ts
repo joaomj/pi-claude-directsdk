@@ -23,7 +23,7 @@ import {
   CONTEXT_WINDOWS,
   PROVIDER_ID,
 } from "./models.js";
-import { lazyStream } from "@earendil-works/pi-ai/api/lazy";
+import { lazyStream } from "./lazy-stream.js";
 
 export { PROVIDER_ID };
 

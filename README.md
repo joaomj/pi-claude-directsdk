@@ -6,7 +6,7 @@ Use Claude inside Pi through the unmodified Claude Code executable. Pi owns the 
 
 Capabilities:
 
-- Run `sonnet`, `opus`, `haiku`, and versioned routes as Pi models.
+- Run `sonnet`, `opus`, `haiku`, and versioned routes as Pi models, including `claude-haiku-5-5`.
 - Execute Pi tools (`read`, `bash`, `edit`, `write`, `codemode`) with Claude models.
 - Resume sessions with exact replay of signed thinking.
 - Work in interactive, print (`-p`), and resumed sessions.
