@@ -197,11 +197,6 @@ export function prepareHistory(
         break;
       }
       case "assistant": {
-        // Failed setup and cancellation can leave an empty entry in Pi history.
-        if (message.content.length === 0 &&
-            (message.stopReason === "error" || message.stopReason === "aborted")) {
-          break;
-        }
         const carrier = readCarrier(message);
         if (carrier && projectionsEqual(carrier.projection, messageProjection(message))) {
           for (const native of carrier.messages) {
@@ -241,6 +236,10 @@ export function prepareHistory(
           }
         }
         if (blocks.length === 0) {
+          // Interrupted responses can contain empty text or thinking placeholders.
+          if (message.stopReason === "error" || message.stopReason === "aborted") {
+            break;
+          }
           throw replayError("Empty assistant message cannot be replayed");
         }
         frames.push({ type: "assistant", message: { role: "assistant", content: blocks } });
