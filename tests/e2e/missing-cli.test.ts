@@ -14,9 +14,9 @@ import type {
   TranscriptContext,
 } from "@earendil-works/pi-ai/compat";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
-import { MODELS, streamSimple } from "../../src/provider.js";
+import { streamSimple } from "../../src/provider.js";
 import { INSTALL_HINT } from "../../src/errors.js";
-import { collectTerminal } from "./helpers.js";
+import { collectTerminal, fixtureModel } from "./helpers.js";
 
 function context(): TranscriptContext {
   return normalizeContext({
@@ -32,9 +32,7 @@ function context(): TranscriptContext {
 }
 
 function model(): Model<Api> {
-  const found = MODELS.find((entry) => entry.id === "sonnet");
-  assert.ok(found, "pinned catalog must contain sonnet");
-  return found as unknown as Model<Api>;
+  return fixtureModel("sonnet");
 }
 
 /** Environment with no executable `claude` and no leftover auth overrides. */

@@ -12,7 +12,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import type { ThinkingLevel, Tool } from "@earendil-works/pi-ai/compat";
 import { isRecord } from "./types.js";
 import { INERT_MCP_SOURCE } from "./inert-mcp.js";
-import { supportsAdaptiveThinking } from "./models.js";
 
 /** MCP server name in the native child. Tool names are `mcp__pi__<name>`. */
 export const MCP_SERVER_NAME = "pi";
@@ -133,10 +132,9 @@ export function buildRequestBody(options: {
   toolChoice?: "auto" | "none" | undefined;
   reasoning?: ThinkingLevel | undefined;
   thinkingLevelMap?: Partial<Record<string, string | null>> | undefined;
-  nativeModelId: string;
   maxTokens?: number | undefined;
 }): RequestBuild {
-  const { tools, nativeModelId } = options;
+  const { tools } = options;
   if (options.toolChoice !== undefined && options.toolChoice !== "auto" && options.toolChoice !== "none") {
     throw new Error("Only tool_choice auto and none are supported");
   }
@@ -194,12 +192,9 @@ export function buildRequestBody(options: {
   // Pi has no thinking-off level: an undefined reasoning keeps native
   // defaults (best-effort mirror of the reference implementation).
   if (options.reasoning !== undefined) {
-    const mapped =
-      options.thinkingLevelMap?.[options.reasoning] ?? defaultEffort(options.reasoning);
-    if (mapped !== null) {
-      if (supportsAdaptiveThinking(nativeModelId)) {
-        body["thinking"] = { type: "adaptive" };
-      }
+    const mapped = options.thinkingLevelMap?.[options.reasoning];
+    // Native Claude Code owns thinking mode. Only send a verified effort.
+    if (mapped !== undefined && mapped !== null) {
       body["output_config"] = { effort: mapped };
     }
   }
@@ -215,25 +210,7 @@ export function buildRequestBody(options: {
   return { body, manifest, toolNames };
 }
 
-function defaultEffort(level: ThinkingLevel | "off"): string | null {
-  switch (level) {
-    case "off":
-      return null;
-    case "minimal":
-    case "low":
-      return "low";
-    case "medium":
-      return "medium";
-    case "high":
-      return "high";
-    case "xhigh":
-      return "xhigh";
-    case "max":
-      return "max";
-    default:
-      return null;
-  }
-}
+
 
 export interface RequestFiles {
   systemPath: string;

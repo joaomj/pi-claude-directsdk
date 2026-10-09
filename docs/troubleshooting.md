@@ -9,7 +9,10 @@
 | No `claude` on `PATH` | `missing` | Install with `npm install -g @anthropic-ai/claude-code` or set `CLAUDE_DIRECTSDK_COMMAND` to the executable path. |
 | CLI installed but not logged in | `logged-out` | Run `claude auth login` as the user Pi runs as, set `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) in the environment Pi runs in, or point `CLAUDE_DIRECTSDK_CONFIG_DIR` at a logged-in config directory. Then select the provider again. |
 | Conflicting auth or backend overrides | `env-conflict` | Remove the named variables from the launching environment. Values are never printed. |
-| History cannot be replayed | `replay` | Compact or restart the session. Common causes: thinking without a native signature, an empty assistant message, a tool call outside the current inventory, assistant prefill, or an unsupported content block. |
+| Catalog refresh fails | catalog | Read the warning for the source or CLI failure. Retry `/model` or run `pi update --models`. No pinned fallback is used. |
+| Model excluded from catalog | metadata | Read the warning for the missing field. Update Claude Code if picker metadata is incomplete. Unverified limits and prices are never guessed. |
+| No DirectSDK models on a fresh offline install | catalog | Connect once and run `pi update --models`, or start interactive Pi and open `/model`. |
+| History cannot be replayed | `replay` | Compact or restart the session. Common causes: an empty assistant message, a tool call outside the current inventory, assistant prefill, or an unsupported content block. |
 | Native request failed | `native` | Read the native detail in the message. |
 | Upstream response incomplete | `upstream` | Retry the request. |
 | Request timed out | `timeout` | Retry the request. The default timeout is 180 seconds. |
@@ -38,4 +41,6 @@ The qualified CLI range is `>=2.1.263 <2.2.0` (`QUALIFIED_CLI_RANGE` in `src/mod
 
 ## Session recovery
 
-When replay rejects history (for example after editing an assistant message that carried signed thinking), compact or restart the session. Do not hand-edit session files to reattach native blocks. A stale signature is never attached to rewritten content by design.
+Switching providers does not require compaction or a restart. Thinking without a matching native carrier is replayed as ordinary assistant text. This also applies after editing an assistant message that carried signed thinking.
+
+For other unsupported history, compact or restart the session. Do not hand-edit session files to reattach native blocks. A stale signature is never attached to rewritten content by design.

@@ -22,9 +22,9 @@ flowchart TD
 
 ### Provider entry (`src/provider.ts`, `extensions/claude-directsdk/index.ts`)
 
-The extension registers provider id `claude-directsdk` with a static pinned catalog (`MODELS`). When `RefreshModelsContext.allowNetwork` is false, `refreshModels` returns `MODELS` without loading discovery code or running CLI probes. When live refresh is allowed, discovery annotates known routes with live picker labels. Unknown live routes stay unlisted because the provider has no verified cost metadata for them. Discovery failures keep the pinned catalog. Module-load errors remain visible to Pi.
+The extension registers a complete Pi provider with id `claude-directsdk` and an initially empty catalog. Cache-only refresh restores verified snapshots from Pi’s model store without CLI probes or network work. Live refresh runs after editor startup and reports failures instead of returning pinned models.
 
-`streamSimple` uses Pi's `lazyStream` helper to return a stream immediately. The helper loads `src/stream.ts` asynchronously, then forwards events from `streamClaudeDirectSdk`. The provider preserves the model, transcript, and request options. See [startup.md](startup.md) for measurements and limits.
+`streamSimple` uses `src/lazy-stream.ts` to return a stream immediately. The wrapper loads `src/stream.ts` asynchronously and preserves the model, transcript, and request options. See [startup.md](startup.md).
 
 ### History replay (`src/replay.ts`)
 
@@ -34,8 +34,9 @@ Rules:
 
 - Historical user frames carry `shouldQuery: false` and expect a zero-turn acknowledgment. Only the final frame may generate.
 - The last frame must be a nonempty user or tool-result message. Assistant prefill is unsupported.
-- Unsupported history is rejected with a `replay` error, never flattened into prose.
-- Signed native thinking survives only inside a durable carrier (`pi-claude-directsdk/native`) attached to the Pi assistant message. The carrier is restored only when the visible projection (text, thinking, tool calls) still matches. Any edit drops the native blocks. Thinking without a signature cannot be replayed. Session files persist the carrier, so resumed turns replay exactly.
+- Thinking without a matching native carrier is replayed as ordinary assistant text. This allows switching providers during a session.
+- Other unsupported history is rejected with a `replay` error, never flattened into prose.
+- Signed native thinking survives only inside a durable carrier (`pi-claude-directsdk/native`) attached to the Pi assistant message. The carrier is restored only when the visible projection (text, thinking, tool calls) still matches. Any edit drops the native blocks. Session files persist the carrier, so resumed turns replay exactly.
 
 ### Request assembly (`src/request.ts`)
 
@@ -70,9 +71,17 @@ The provider converts child stdout `stream-json` to Pi events. Native tool calls
 
 The MCP server name in the native child is `pi`. Tool names are `mcp__pi__<name>`. The server advertises Pi tools so the CLI can call them. It never executes them. Pi alone executes tools.
 
-### Setup probes (`src/setup.ts`)
+### Catalog discovery (`src/discovery.ts`, `src/web-catalog.ts`)
 
-`setupStatus` runs `claude auth status` against the local credential store. `discoverModels` runs the `initialize` handshake to enumerate the account picker without a Messages request. The admission relay proves the handshake sends no upstream call by counting requests. Anything unexpected returns a safe fallback so callers use the pinned catalog rather than failing setup.
+Discovery runs the Claude Code `initialize` handshake through an asynchronous supervised child. It never calls synchronous authentication or version probes. A loopback guard denies all HTTP requests and detects attempted Messages requests; discovery cannot consume subscription allowance.
+
+Public Anthropic Markdown documents supply current model IDs, model pages, prices, effort levels, and cache lifetimes. Model pages must confirm the canonical Claude API ID, input modalities, context window, output limit, and thinking capability. The account picker supplies resolved aliases and effort constraints. Current public models can appear even before the CLI picker includes them; their labels state that account availability is unverified.
+
+Missing metadata excludes only the affected model with a warning. Shared-source failures reject refresh and remove the snapshot. Refresh uses a shared deadline and abort signal. Pi owns persistence and generation-checked publication.
+
+### Request-time probes (`src/setup.ts`)
+
+CLI resolution and version qualification run only when a model call needs them. They are not part of catalog discovery or editor startup.
 
 ## Guarantees
 
@@ -83,12 +92,16 @@ The MCP server name in the native child is `pi`. Tool names are `mcp__pi__<name>
 
 ## Model routing
 
-The model catalog is pinned in `src/models.ts` (`CATALOG`, `ALIAS_IDS`, `ALIASES`). That file is the authority for ids, aliases, context windows, and cost rates. Prose here states only the stable rules:
+The catalog has no hand-written model inventory, aliases, limits, or price table. Its sources are:
 
-- Short aliases resolve to canonical native routes.
-- Routes with a 1,000,000-token window take the `[1m]` native suffix. Haiku 4.5 stays un-suffixed.
-- `QUALIFIED_CLI_RANGE` pins the qualified CLI versions. Routing, replay acknowledgments, and admission behavior are version-sensitive. Re-run the fake-upstream gate (see [testing.md](testing.md)) before widening the range.
-- When live refresh is allowed, `refreshModels` annotates known pinned routes with live picker labels. Unknown live routes stay unlisted. Any discovery failure keeps the pinned catalog.
+- Claude Code’s account picker for resolved aliases and account-visible models.
+- [Anthropic’s model overview](https://platform.claude.com/docs/en/about-claude/models/overview) and linked model pages for canonical routes and capabilities.
+- [Anthropic’s pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing) for token prices, request-wide tiers, and cache lifetimes.
+- [Anthropic’s effort documentation](https://platform.claude.com/docs/en/build-with-claude/effort) for web-only model effort levels.
+
+Verified context windows control native `[1m]` selection. Claude Code owns thinking mode; the request body sends only an effort level that the catalog supports. Missing metadata is never replaced with a guessed limit or a zero price.
+
+`QUALIFIED_CLI_RANGE` in `src/models.ts` still controls transport qualification. Re-run the fake-upstream gate before widening it.
 
 ## Tool transport
 

@@ -1,18 +1,27 @@
 # Startup
 
-DirectSDK uses the pinned catalog during cache-only initialization. It does not run Claude CLI probes in that phase. The request transport loads on the first Claude request. Pi and the Claude executable remain unmodified.
+DirectSDK registers synchronously with an empty catalog. The extension factory starts no processes, sockets, timers, or web requests. The request transport remains lazy.
 
 ## Behavior
 
-- When `RefreshModelsContext.allowNetwork` is false, `refreshModels` returns `MODELS` immediately.
-- When live refresh is allowed, `refreshModels` loads `src/setup.ts` and checks cancellation before discovery.
-- Live discovery can still wait for CLI authentication status, version, and picker initialization. These probes make no Messages request.
-- `streamSimple` uses Pi's existing `lazyStream` helper. It loads `src/stream.ts` asynchronously and preserves the transcript and request options.
-- Module-load failures are reported as errors. Discovery failures keep the pinned catalog.
+- Cache-only refresh restores a previously verified snapshot from Pi’s model store. It runs no CLI probes or web requests.
+- Snapshot entries are labeled `last verified snapshot`. A fresh offline install has no DirectSDK models.
+- Interactive Pi starts live refresh after the editor is ready. DirectSDK uses this existing lifecycle, not an extension startup hook.
+- Live refresh loads discovery modules asynchronously. It uses a supervised child for the Claude Code picker and asynchronous requests for public Anthropic documentation.
+- Refresh has a 12-second deadline and honors Pi’s abort signal. Document requests have a 2 MiB limit and at most four model pages load concurrently.
+- Successful refresh persists verified metadata through Pi’s model store. Repeated refreshes reuse it for 15 minutes unless forced.
+- Incomplete model metadata produces a warning and excludes that model. A refresh failure reports the error and deletes the snapshot, without a pinned fallback.
 
-The change does not add credential caching or alter CLI-managed authentication. It does not change model routes, aliases, context windows, or prices. The catalog contains six canonical models and five aliases, including Opus 5.5. Removing entries would not avoid the CLI probes that caused the main delay.
+On a fresh installation, run `pi update --models` before selecting a DirectSDK model from the command line. Alternatively, start interactive Pi and open `/model` to refresh. This first refresh is required because startup does not invent offline models.
 
-## Startup measurements
+## Package resolution
+
+The local lazy-stream wrapper imports `@earendil-works/pi-ai/compat`, which Pi resolves for extensions. It does not import the previously incompatible `@earendil-works/pi-ai/api/lazy` subpath. Discovery and transport modules remain outside the extension load path.
+
+## Previous startup measurements
+
+The following measurements describe the previous cache-only guard and lazy-loading changes, not the new discovery implementation.
+
 
 The measurements use Pi 1.1.0 with the account's normal extensions and OpenAI selected. Readiness means that Pi renders an inserted input marker. It does not mean that a model request completes.
 
@@ -63,8 +72,8 @@ The benchmark checks that the expected model remains visible and no configuratio
 
 Separate diagnostic launches use a 1ms Node Inspector CPU sampling interval. Subprocess instrumentation records operation, duration, and caller location. It does not record subprocess arguments or output. Profile analysis uses the main Pi process, not a child profile.
 
-## Validation and limits
+## Current validation and limits
 
-The offline listing regression fails before the guard and passes afterward. It verifies Opus 5.5, existing aliases, and zero CLI invocations. Missing-CLI and loopback checks exercise the registered provider's lazy `streamSimple`. Loopback checks cover text, tool delivery, single-request admission, strict-decoding rejection, and mid-flight cancellation. Managed Pi 1.1.0 also reaches the expected missing-CLI error through the lazy transport.
+The cold-start regression loads the extension through the real Pi CLI with isolated configuration. It verifies zero Claude CLI invocations and no pinned model entries. Catalog tests verify that the event loop responds while discovery is running, cancellation stops a stalled child, and cache-only initialization performs no web requests.
 
-No paid model requests are used. The first Claude request now pays the deferred module-load cost. Its real-world latency is not measured. The change does not promise faster model responses or eliminate explicit live-refresh waits. See [testing.md](testing.md) for validation commands and [architecture.md](architecture.md) for the request lifecycle.
+These checks protect the cause of the previous delay. They do not establish a new interactive-readiness benchmark or promise zero extension overhead. No paid model requests are needed. See [testing.md](testing.md) for focused commands.

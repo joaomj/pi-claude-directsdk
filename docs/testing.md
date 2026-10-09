@@ -10,7 +10,8 @@ npm test
 
 Coverage by default:
 
-- `provider-list.test.ts`: loads the extension through the real `pi` binary with isolated configuration. It verifies that Opus 5.5 and the existing aliases remain listed offline. A fixture CLI records any invocation. The test requires zero invocations and failed on the code before the cache-only guard.
+- `provider-list.test.ts`: loads the extension through the real `pi` binary with isolated configuration. It verifies zero CLI invocations and no pinned models on a fresh offline start.
+- `catalog-refresh.test.ts`: exercises Pi’s model runtime with CLI and HTTP fixtures. It verifies responsive refresh, automatic new-model inclusion, aliases, pricing tiers, missing metadata warnings, failure reporting, snapshot restoration, and cancellation.
 - `missing-cli.test.ts` (E2E-02): runs the registered provider's `streamSimple` with an empty `PATH` and asserts the install hint. Proves the missing-CLI failure path.
 - `process-lifetime.test.ts`: runs outside the test runner and asserts the caller receives the child final exit status after its output streams close.
 
@@ -26,9 +27,10 @@ PI_DIRECTSDK_CLI=/path/to/claude npm test
 
 `fake-upstream.test.ts` (E2E-03) calls the registered provider's `streamSimple`, including lazy loading, and runs the full pipeline against the real CLI with a loopback synthetic Anthropic Messages endpoint and fixture credentials in an isolated environment. It asserts:
 
-1. A grammar tool uses JSON-schema fallback and returns a usable tool call.
-2. Exactly one upstream `POST /v1/messages` is admitted per Pi call.
-3. Required strict decoding fails before contacting upstream.
+1. Foreign thinking reaches upstream as text, with historical tool calls and results intact.
+2. A grammar tool uses JSON-schema fallback and returns a usable tool call.
+3. Exactly one upstream `POST /v1/messages` is admitted per Pi call.
+4. Required strict decoding fails before contacting upstream.
 
 A second case holds the upstream open, aborts mid-flight, and asserts the call terminates as `aborted` instead of hanging. No traffic leaves loopback. No subscription allowance is consumed.
 
@@ -49,7 +51,7 @@ Gateway runs require `OPENROUTER_API_KEY` in the environment. The key is never l
 ```sh
 npm run build
 PI_DIRECTSDK_CLI="$(command -v claude)" node --test \
-  --test-name-pattern='grammar tool|one-shot supervision' \
+  --test-name-pattern='foreign thinking|one-shot supervision' \
   .build/tests/e2e/fake-upstream.test.js \
   .build/tests/e2e/process-lifetime.test.js
 ```
@@ -58,9 +60,16 @@ The grammar check uses the real CLI with fixture credentials and a loopback upst
 
 ## Startup checks
 
-The startup change passes type-check, build, offline catalog listing, missing-CLI handling, and the loopback pipeline. A separate check loads the extension through managed Pi 1.1.0 and verifies a structured missing-CLI error through the lazy transport. It closes child stdin and checks the JSON error event, not the process exit code. Pi print mode can exit successfully after reporting a model error in that event.
+Run the focused offline checks:
 
-See [startup.md](startup.md) for the readiness benchmark method and results. No paid requests are needed for these checks.
+```sh
+npm run build
+node --test .build/tests/e2e/provider-list.test.js \
+  .build/tests/e2e/catalog-refresh.test.js \
+  .build/tests/e2e/missing-cli.test.js
+```
+
+The real Pi cold-start check loads only this extension with isolated configuration. The catalog checks use a slow CLI fixture and synthetic HTTP documents; no external requests or paid model calls occur. See [startup.md](startup.md) for the previous readiness measurements and current limits.
 
 ## Qualification status
 

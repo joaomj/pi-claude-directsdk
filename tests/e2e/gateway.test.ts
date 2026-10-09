@@ -28,8 +28,7 @@ import type {
 } from "@earendil-works/pi-ai/compat";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
 import { streamClaudeDirectSdk } from "../../src/stream.js";
-import { MODELS } from "../../src/provider.js";
-import { collectTerminal } from "./helpers.js";
+import { collectTerminal, fixtureModel } from "./helpers.js";
 
 const GATEWAY = process.env["PI_DIRECTSDK_GATEWAY"] === "1";
 const KEY = process.env["OPENROUTER_API_KEY"];
@@ -48,9 +47,7 @@ if (GATEWAY && !CLI) {
 const GATEWAY_MODEL = "anthropic/claude-opus-5-5";
 
 function model(): Model<Api> {
-  const found = MODELS.find((entry) => entry.id === "opus");
-  assert.ok(found, "pinned catalog must contain opus");
-  return found as unknown as Model<Api>;
+  return fixtureModel("opus");
 }
 
 function gatewayEnv(): Record<string, string> {

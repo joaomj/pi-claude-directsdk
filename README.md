@@ -6,9 +6,11 @@ Use Claude inside Pi through the unmodified Claude Code executable. Pi owns the 
 
 Capabilities:
 
-- Run `sonnet`, `opus`, `haiku`, and versioned routes as Pi models.
+- Run `sonnet`, `opus`, `haiku`, and versioned routes as Pi models, including `claude-haiku-5-5`.
 - Execute Pi tools (`read`, `bash`, `edit`, `write`, `codemode`) with Claude models.
-- Resume sessions with exact replay of signed thinking.
+- Resume sessions with exact replay of native signed thinking.
+- Switch providers mid-session; foreign thinking replays as ordinary assistant text.
+- Refresh model routes, limits, and prices from Claude Code and Anthropic documentation.
 - Work in interactive, print (`-p`), and resumed sessions.
 
 Limits:
@@ -47,7 +49,13 @@ Install the extension, then restart Pi:
 pi install git:github.com/joaomj/pi-claude-directsdk
 ```
 
-Start Pi with a DirectSDK model:
+Refresh model catalogs once before selecting a DirectSDK model on a fresh install:
+
+```sh
+pi update --models
+```
+
+Then start Pi with a DirectSDK model:
 
 ```sh
 pi --model claude-directsdk/haiku
@@ -59,19 +67,24 @@ The model catalog does not guarantee account entitlement. Start with `haiku` for
 
 ## Use
 
-List models from a local checkout without installing it:
+Start Pi with the local extension without installing it:
+
+```sh
+pi -e ./extensions/claude-directsdk/index.ts
+```
+
+Open `/model` and wait for catalog refresh. Then select a DirectSDK model. Later invocations can use the verified snapshot:
 
 ```sh
 pi -e ./extensions/claude-directsdk/index.ts --list-models claude-directsdk
-```
-
-Run a prompt:
-
-```sh
 pi -e ./extensions/claude-directsdk/index.ts -p --model claude-directsdk/sonnet -- "Hello."
 ```
 
-Cache-only initialization uses the pinned catalog without Claude CLI probes. The request transport loads on the first Claude request. See [docs/startup.md](docs/startup.md) for behavior, measurements, and limits.
+Startup performs no CLI probes or web requests. Pi restores only a previously verified catalog snapshot, labeled as such. A fresh offline install has no DirectSDK models. Interactive Pi refreshes catalogs in the background after the editor is ready.
+
+Refresh uses Claude Code's account picker and Anthropic's public model, pricing, and effort documentation. Models absent from the account picker are labeled `not in CLI picker`; their account entitlement is unverified. Missing required metadata excludes the affected model with a warning. A failed refresh reports the error and removes the snapshot. There is no pinned fallback.
+
+The request transport still loads on the first Claude request. See [docs/startup.md](docs/startup.md) for behavior and limits.
 
 ## Configuration
 
@@ -93,7 +106,7 @@ This runs offline checks only and consumes no subscription allowance. Opt-in liv
 
 ## Costs
 
-Per-model cost metadata is Anthropic list price. Pi reports it as an estimate, never as a subscription charge. Failed or interrupted requests are never reported as free.
+Per-model cost metadata comes from [Anthropic’s pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing). Pi reports it as an estimate, never as a subscription charge. Failed or interrupted requests are never reported as free.
 
 ## Documentation
 

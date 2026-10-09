@@ -10,7 +10,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai/compat";
-import { MODELS } from "../../src/provider.js";
+import { fixtureModel } from "./helpers.js";
 
 export const GATEWAY_SKIP_REASON =
   "needs PI_DIRECTSDK_GATEWAY=1 with OPENROUTER_API_KEY and PI_DIRECTSDK_CLI set (paid)";
@@ -28,9 +28,7 @@ export function requireGateway(): void {
 export const GATEWAY_MODEL = "anthropic/claude-opus-5-5";
 
 export function catalogModel(id: string): Model<Api> {
-  const found = MODELS.find((entry) => entry.id === id);
-  assert.ok(found, `pinned catalog must contain ${id}`);
-  return found as unknown as Model<Api>;
+  return fixtureModel(id);
 }
 
 // Gateway credential, discovered by value prefix. Indirected through a

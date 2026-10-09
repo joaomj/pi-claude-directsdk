@@ -163,6 +163,7 @@ export function spawnSupervised(options: {
   });
 
   const finish = (info: ExitInfo): void => {
+    options.signal?.removeEventListener("abort", onAbort);
     if (!exit) {
       exit = info;
     }
