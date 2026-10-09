@@ -34,6 +34,8 @@ Rules:
 
 - Historical user frames carry `shouldQuery: false` and expect a zero-turn acknowledgment. Only the final frame may generate.
 - The last frame must be a nonempty user or tool-result message. Assistant prefill is unsupported.
+- Empty text or thinking placeholders from failed and aborted responses are omitted. Nonempty history remains intact.
+- Tool-call IDs that Claude cannot accept are mapped to valid native IDs. Tool results use the same mapping. Stored Pi IDs remain unchanged.
 - Thinking without a matching native carrier is replayed as ordinary assistant text. This allows switching providers during a session.
 - Other unsupported history is rejected with a `replay` error, never flattened into prose.
 - Signed native thinking survives only inside a durable carrier (`pi-claude-directsdk/native`) attached to the Pi assistant message. The carrier is restored only when the visible projection (text, thinking, tool calls) still matches. Any edit drops the native blocks. Session files persist the carrier, so resumed turns replay exactly.
@@ -49,7 +51,7 @@ The current system prompt and tool schemas travel through per-request private fi
 
 Files avoid OS argument and environment-string limits. Authentication and identity headers are never replaced. The relay preserves them.
 
-The child argv (`buildArgv`) runs the CLI with `--input-format stream-json`, `--output-format stream-json`, `--verbose`, `--include-partial-messages`, `--max-turns 1`, `--permission-mode dontAsk`, `--no-session-persistence`, `--strict-mcp-config`, `--disable-slash-commands`, and an empty `--setting-sources`. `--max-turns 1` is accepted by the qualified CLI even though recent `--help` output hides it. The fake-upstream gate re-verifies it on every CLI version change.
+The child argv (`buildArgv`) runs the CLI with `--input-format stream-json`, `--output-format stream-json`, `--verbose`, `--include-partial-messages`, `--max-turns 1`, `--permission-mode dontAsk`, `--no-session-persistence`, `--strict-mcp-config`, `--disable-slash-commands`, and an empty `--setting-sources`. `--max-turns 1` is accepted by the qualified CLI even though recent `--help` output hides it. The installed-Pi harness verifies the request path with the user’s real CLI.
 
 The child environment (`buildChildEnv`) points `ANTHROPIC_BASE_URL` at the relay. It sets native isolation flags (`ENABLE_TOOL_SEARCH=false`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `CLAUDE_CODE_MAX_RETRIES=0`, `DISABLE_AUTO_COMPACT=1`, `DISABLE_COMPACT=1`, `CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off`). Sampling controls from Pi options (`temperature`, `top_p`) are dropped because subscription routes reject them.
 
@@ -57,7 +59,7 @@ The child environment (`buildChildEnv`) points `ANTHROPIC_BASE_URL` at the relay
 
 The relay binds an ephemeral loopback port with a random per-request route (`/admit/<token>`). It forwards only the first upstream Messages request and rejects later native recovery or retry attempts locally with `PI_MODEL_ADMISSION_CONSUMED`. Only HTTP transfer encoding changes. Request identity and payload stay native.
 
-The relay reconstructs the upstream assistant message from the SSE stream (`SseCapture`) and records status, request id, failure text, and an error body (capped at 64 KiB). Upstream targets must be HTTPS, except loopback HTTP fixtures used by tests. Request bodies are capped at 512 MiB.
+The relay reconstructs the upstream assistant message from the SSE stream (`SseCapture`) and records status, request id, failure text, and an error body (capped at 64 KiB). Upstream targets must be HTTPS, except loopback HTTP endpoints. Request bodies are capped at 512 MiB.
 
 ### Child supervision (`src/process.ts`)
 
@@ -65,7 +67,7 @@ Each Pi model call owns one child in its own process group. Abort and failure ki
 
 ### Stream conversion (`src/stream.ts`)
 
-The provider converts child stdout `stream-json` to Pi events. Native tool calls are published only after the first upstream response is complete and the child has exited. Usage and stop reason come from the authoritative native usage. Incomplete native or upstream responses produce `incomplete` or `upstream` errors.
+The provider converts child stdout `stream-json` to Pi events. Native result errors are preserved even when stderr is empty. Prompt-length errors report the selected route and configured context window. Native tool calls are published only after the first upstream response is complete and the child has exited. Usage and stop reason come from the authoritative native usage. Incomplete native or upstream responses produce `incomplete` or `upstream` errors.
 
 ### Inert MCP (`src/inert-mcp.ts`)
 
@@ -101,7 +103,7 @@ The catalog has no hand-written model inventory, aliases, limits, or price table
 
 Verified context windows control native `[1m]` selection. Claude Code owns thinking mode; the request body sends only an effort level that the catalog supports. Missing metadata is never replaced with a guessed limit or a zero price.
 
-`QUALIFIED_CLI_RANGE` in `src/models.ts` still controls transport qualification. Re-run the fake-upstream gate before widening it.
+`QUALIFIED_CLI_RANGE` in `src/models.ts` still controls transport qualification. Run the installed-Pi harness with fresh and complete-session scenarios before widening it.
 
 ## Tool transport
 

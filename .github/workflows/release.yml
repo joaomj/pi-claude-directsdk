@@ -13,9 +13,8 @@
 # The workflow file must exist on main first.
 # Requires npm CLI >= 11.5.1 and Node >= 22.14 in the publish job.
 #
-# The gate runs `npm run check` plus the offline-safe tests only.
-# `e2e-01` needs a `pi` binary that clean checkouts lack, so it stays a
-# local opt-in. See docs/testing.md.
+# CI checks types and compilation only. Runtime verification uses the
+# maintainer’s installed Pi and stays outside CI. See docs/testing.md.
 
 name: Release
 
@@ -44,7 +43,6 @@ jobs:
         run: npm audit --audit-level=high
       - run: npm run check
       - run: npm run build
-      - run: node --test .build/tests/e2e/missing-cli.test.js .build/tests/e2e/process-lifetime.test.js
 
   publish:
     needs: verify

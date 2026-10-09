@@ -591,7 +591,7 @@ async function executeCall(
     const used = relay.used;
     let authoritative: NativeAssistantMessage;
     const soleResult = results[0];
-    // Stderr is the only CLI diagnostic when the native protocol breaks.
+    // Native result diagnostics can be present even when stderr is empty.
     const childDetail = child
       ? ` (exit ${child.exitInfo?.code ?? "?"}${
           child.exitInfo?.signal ? `/${child.exitInfo.signal}` : ""
@@ -603,6 +603,10 @@ async function executeCall(
       );
     }
     const result: NativeResultLine = soleResult;
+    const resultErrors = [
+      ...(typeof result["result"] === "string" && result["result"] ? [result["result"]] : []),
+      ...(Array.isArray(result["errors"]) ? result["errors"].filter((value): value is string => typeof value === "string") : []),
+    ].join("; ");
     if (used) {
       if (relay.status !== 200 || !relay.capture.complete || !relay.capture.message) {
         throw upstreamError(
@@ -622,6 +626,19 @@ async function executeCall(
       }
       if (nativeErrorText) {
         throw nativeError(nativeErrorText);
+      }
+      if (result.is_error && resultErrors) {
+        if (/not logged in|authentication_failed/i.test(resultErrors)) {
+          throw loggedOutError(resultErrors);
+        }
+        if (/prompt is too long|context_length_exceeded/i.test(resultErrors)) {
+          throw nativeError(
+            `context_length_exceeded: ${resultErrors}. Model ${model.id} uses native route ${nativeModelId} ` +
+            `with a configured context window of ${model.contextWindow.toLocaleString("en-US")} tokens. ` +
+            "Check this model's contextWindow override in models.json or compact the session.",
+          );
+        }
+        throw nativeError(`${result.subtype ?? "native failure"}: ${resultErrors}${childDetail}`);
       }
       if (assistants.length === 0 || !stopped) {
         const resultText =
@@ -647,10 +664,7 @@ async function executeCall(
       !denialHandled &&
       (exitCode !== 0 || result?.is_error || result?.subtype !== "success")
     ) {
-      const detail =
-        typeof result?.["result"] === "string" && result["result"]
-          ? `: ${result["result"]}`
-          : "";
+      const detail = resultErrors ? `: ${resultErrors}` : "";
       throw nativeError(`${result?.subtype ?? "unknown exit"}${detail}`);
     }
 

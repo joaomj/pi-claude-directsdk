@@ -27,7 +27,7 @@ Limits:
 - A Claude paid plan. The free plan excludes the CLI.
 - A Claude Code login via `claude auth login`.
 
-Transport qualification uses Pi 1.0.2 and Claude Code 2.1.281. Startup and extension loading are also verified with Pi 1.1.0. Those startup checks make no paid requests.
+The installed-Pi harness is verified with Pi 1.1.0 and Claude Code 2.1.281. Verification includes offline startup and a paid request from a complete existing-session fork.
 
 ## Install
 
@@ -102,7 +102,7 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) for login and environment
 npm test
 ```
 
-This runs offline checks only and consumes no subscription allowance. Opt-in live suites are documented in [docs/testing.md](docs/testing.md).
+This runs offline startup verification through your installed Pi and consumes no subscription allowance. Real model requests and complete-session replay require explicit approval. See [docs/testing.md](docs/testing.md).
 
 ## Costs
 
@@ -113,8 +113,8 @@ Per-model cost metadata comes from [Anthropic’s pricing documentation](https:/
 | Document | Contents |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Request lifecycle, model routing, tool transport, admission relay. |
-| [docs/startup.md](docs/startup.md) | Cache-only initialization, lazy loading, and startup measurements. |
-| [docs/testing.md](docs/testing.md) | Offline and opt-in test suites. |
+| [docs/startup.md](docs/startup.md) | Cache-only initialization and lazy loading. |
+| [docs/testing.md](docs/testing.md) | Installed-Pi harness, paid scenarios, and complete-session replay. |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Missing CLI, logged-out CLI, conflicting environment. |
 
 ## Acknowledgments

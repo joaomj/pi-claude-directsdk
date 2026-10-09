@@ -17,6 +17,8 @@
   "files": [
     "extensions/**/*",
     "src/**/*",
+    "scripts/verify.py",
+    "scripts/trace-native.mjs",
     "docs/**/*",
     "README.md",
     "LICENSE"
@@ -47,6 +49,6 @@
   "scripts": {
     "check": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
-    "test": "npm run build && node --test \".build/tests/**/*.test.js\""
+    "test": "python3 scripts/verify.py startup"
   }
 }

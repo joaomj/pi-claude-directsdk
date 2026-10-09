@@ -1,82 +1,69 @@
-# Testing
+# Verification through the installed Pi
 
-## Default suite
+The repository has no isolated test suite, mocked provider runtime, or fake upstream. The harness runs the operator’s installed `pi` executable with real settings, credentials, tools, and extensions. It uses a private copy of the user’s configuration and replaces only the DirectSDK extension source with the local checkout. This prevents the installed package from overwriting the local code during extension loading.
+
+## Requirements
+
+- Python 3 and the user’s installed Pi on `PATH`.
+- Claude Code installed and authenticated for paid scenarios.
+- A discovered model in the user’s Pi configuration or verified model snapshot.
+
+Use `--pi /absolute/path/to/pi` or `PI_VERIFY_PI` to select another installed executable. The harness excludes repository `node_modules` directories from automatic executable lookup.
+
+## Scenarios
+
+### Offline startup
 
 ```sh
 npm test
 ```
 
-`npm test` builds the project (`tsc -p tsconfig.build.json`) and runs `node --test` over `.build/tests/**/*.test.js`. It runs offline checks only, including the one-shot child-lifetime check. It consumes no subscription allowance.
-
-Coverage by default:
-
-- `provider-list.test.ts`: loads the extension through the real `pi` binary with isolated configuration. It verifies zero CLI invocations and no pinned models on a fresh offline start.
-- `catalog-refresh.test.ts`: exercises Pi’s model runtime with CLI and HTTP fixtures. It verifies responsive refresh, automatic new-model inclusion, aliases, pricing tiers, missing metadata warnings, failure reporting, snapshot restoration, and cancellation.
-- `missing-cli.test.ts` (E2E-02): runs the registered provider's `streamSimple` with an empty `PATH` and asserts the install hint. Proves the missing-CLI failure path.
-- `process-lifetime.test.ts`: runs outside the test runner and asserts the caller receives the child final exit status after its output streams close.
-
-## Opt-in suites
-
-These suites never run by default. Each is gated by an environment variable.
-
-### Loopback pipeline (no cost)
+Equivalent command:
 
 ```sh
-PI_DIRECTSDK_CLI=/path/to/claude npm test
+python3 scripts/verify.py startup
 ```
 
-`fake-upstream.test.ts` (E2E-03) calls the registered provider's `streamSimple`, including lazy loading, and runs the full pipeline against the real CLI with a loopback synthetic Anthropic Messages endpoint and fixture credentials in an isolated environment. It asserts:
+The harness runs offline model listing through the installed Pi. It checks the process result and verifies that no Claude child starts. This is not an interactive editor-readiness benchmark.
 
-1. Foreign thinking reaches upstream as text, with historical tool calls and results intact.
-2. A grammar tool uses JSON-schema fallback and returns a usable tool call.
-3. Exactly one upstream `POST /v1/messages` is admitted per Pi call.
-4. Required strict decoding fails before contacting upstream.
-
-A second case holds the upstream open, aborts mid-flight, and asserts the call terminates as `aborted` instead of hanging. No traffic leaves loopback. No subscription allowance is consumed.
-
-### Gateway suites (paid)
+### Fresh model request
 
 ```sh
-PI_DIRECTSDK_GATEWAY=1 PI_DIRECTSDK_CLI=/path/to/claude npm test
+python3 scripts/verify.py fresh --paid
 ```
 
-`gateway.test.ts` (E2E-04) points the real CLI at OpenRouter with an isolated home directory and asserts a text prompt returns terminal `done` with real text and nonzero usage, and a forced tool call publishes valid JSON arguments with a `toolUse` stop reason.
+The harness starts a real Pi session and requests a short `hi` response from Haiku 5.5. It checks the assistant’s terminal result, not only the process exit code. Pi can exit successfully after a model error.
 
-`multi-turn.test.ts` (E2E-05) replays a completed script-writing turn and asserts the follow-up turn ends `done` / `toolUse` with a `.py` tool call that uses the `secrets` module over the 1-1000 range. This shape caught the missing `shouldQuery: false` bug that single-turn tests cannot see.
-
-Gateway runs require `OPENROUTER_API_KEY` in the environment. The key is never logged or written by the tests. Gateway results prove protocol behavior only, never subscription behavior. Cost is pay-as-you-go per call. These suites never run in CI.
-
-## Focused regression checks
+### Complete existing-session replay
 
 ```sh
+python3 scripts/verify.py session --paid --session /absolute/path/to/session.jsonl
+```
+
+The harness copies every session entry into a private temporary snapshot. Pi forks that snapshot and submits the verification prompt. It does not filter errors, replace tools, remove thinking, shorten history, or write to the original session. The user’s working directory, credential values, tool inventory, and other extensions remain in effect. Configuration and credentials are copied privately, not written back.
+
+This is the primary regression check for provider switching and accumulated session history. A fresh request passing does not establish that an existing session works.
+
+## Options and safety
+
+- `--model provider/model` selects the model. The default is `claude-directsdk/claude-haiku-5-5`.
+- `--extension PATH` selects the extension. The default is this checkout’s entry point.
+- `--timeout SECONDS` bounds the scenario. The default is 120 seconds.
+- `--paid` explicitly approves real model requests. Without it, paid scenarios refuse to run.
+
+Run from the same project directory as the original session. Existing tool permissions and extension behavior still apply. The verification prompt asks the model not to call tools, but the harness does not replace the user’s tool inventory.
+
+Private artifacts go to `/tmp/pi-directsdk-verify-*`. The harness removes copied configuration, credentials, input snapshots, and Pi-generated test sessions after the run. It retains summaries and bounded native error diagnostics. It does not save model responses, credentials, or successful native transcript records. Native errors can quote input fragments; inspect the diagnostics before sharing them.
+
+The observer records real Claude process starts, replay acknowledgments, terminal result errors, and exits. It does not substitute native responses or alter the provider request. Automatic Pi retries, if enabled in the user’s settings, can consume additional allowance.
+
+## Build checks and CI
+
+```sh
+npm run check
 npm run build
-PI_DIRECTSDK_CLI="$(command -v claude)" node --test \
-  --test-name-pattern='foreign thinking|one-shot supervision' \
-  .build/tests/e2e/fake-upstream.test.js \
-  .build/tests/e2e/process-lifetime.test.js
 ```
 
-The grammar check uses the real CLI with fixture credentials and a loopback upstream. It verifies JSON-schema fallback, tool-call delivery, single-request admission, and rejection of required strict decoding before an upstream call. The lifetime check runs in a separate process. It verifies that the caller receives the child final exit status after its output streams close. Neither check consumes subscription allowance.
+These commands check types and compilation, not runtime behavior. Release CI runs only those checks. Runtime verification stays local because CI is not the user’s Pi installation and has no approved subscription credentials.
 
-## Startup checks
-
-Run the focused offline checks:
-
-```sh
-npm run build
-node --test .build/tests/e2e/provider-list.test.js \
-  .build/tests/e2e/catalog-refresh.test.js \
-  .build/tests/e2e/missing-cli.test.js
-```
-
-The real Pi cold-start check loads only this extension with isolated configuration. The catalog checks use a slow CLI fixture and synthetic HTTP documents; no external requests or paid model calls occur. See [startup.md](startup.md) for the previous readiness measurements and current limits.
-
-## Qualification status
-
-Qualified: offline e2e, loopback pipeline against CLI 2.1.281, gateway runs against Opus 5.5, and live subscription runs (text, Pi-side tool execution, cancel cleanup, ~92% follow-up cache reads, 5-round tool chaining, session resume).
-
-Re-run the fake-upstream gate before widening `QUALIFIED_CLI_RANGE` in `src/models.ts`.
-
-## Release gate
-
-Pushing a `v*` tag runs `.github/workflows/release.yml`: `npm ci`, `npm run check`, build, and the offline-safe tests (`missing-cli`, `process-lifetime`). The `pi`-binary test (`e2e-01`) stays local-only because clean checkouts lack the binary. On success the workflow checks the tag matches `package.json`, publishes to npm through OIDC trusted publishing, and creates the GitHub Release with generated notes.
+The harness does not yet exercise an in-process `/reload`, cancellation, or an explicit tool round trip. Do not claim those behaviors are verified by these scenarios.

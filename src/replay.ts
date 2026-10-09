@@ -12,6 +12,7 @@
  * assistant message, and only while the visible projection is unchanged.
  */
 
+import { createHash } from "node:crypto";
 import type {
   AssistantMessage,
   AssistantMessageDiagnostic,
@@ -156,6 +157,26 @@ export function prepareHistory(
   allowedToolNames?: Set<string>,
 ): ReplayOutput {
   const frames: NativeFrame[] = [];
+  const nativeIdPattern = /^[a-zA-Z0-9_-]{1,64}$/;
+  const usedIds = new Set(messages.flatMap(message =>
+    message.role === "assistant"
+      ? message.content.filter(block => block.type === "toolCall").map(block => block.id)
+      : message.role === "toolResult" ? [message.toolCallId] : [],
+  ).filter(id => nativeIdPattern.test(id)));
+  const remappedIds = new Map<string, string>();
+  const nativeToolId = (id: string): string => {
+    if (!id) throw replayError("Tool-call IDs must be nonempty");
+    if (nativeIdPattern.test(id)) return id;
+    const existing = remappedIds.get(id);
+    if (existing) return existing;
+    const base = `toolu_pi_${createHash("sha256").update(id).digest("hex").slice(0, 48)}`;
+    let candidate = base;
+    let suffix = 0;
+    while (usedIds.has(candidate)) candidate = `${base}_${++suffix}`;
+    usedIds.add(candidate);
+    remappedIds.set(id, candidate);
+    return candidate;
+  };
   const pushUserBlocks = (blocks: NativeContentBlock[]): void => {
     if (blocks.length === 0) {
       return;
@@ -202,7 +223,9 @@ export function prepareHistory(
           for (const native of carrier.messages) {
             frames.push({
               type: "assistant",
-              message: { role: "assistant", content: deepClone(native.content) },
+              message: { role: "assistant", content: deepClone(native.content).map(block =>
+                block.type === "tool_use" ? { ...block, id: nativeToolId(block.id) } : block,
+              ) },
             });
           }
           break;
@@ -225,7 +248,7 @@ export function prepareHistory(
             }
             blocks.push({
               type: "tool_use",
-              id: block.id,
+              id: nativeToolId(block.id),
               name: toolPrefixedName(block.name),
               input: deepClone(block.arguments),
             });
@@ -261,7 +284,7 @@ export function prepareHistory(
         pushUserBlocks([
           {
             type: "tool_result",
-            tool_use_id: message.toolCallId,
+            tool_use_id: nativeToolId(message.toolCallId),
             content:
               blocks.length === 1 && blocks[0]?.type === "text"
                 ? (blocks[0] as { text: string }).text
