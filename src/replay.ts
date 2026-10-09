@@ -197,6 +197,11 @@ export function prepareHistory(
         break;
       }
       case "assistant": {
+        // Failed setup and cancellation can leave an empty entry in Pi history.
+        if (message.content.length === 0 &&
+            (message.stopReason === "error" || message.stopReason === "aborted")) {
+          break;
+        }
         const carrier = readCarrier(message);
         if (carrier && projectionsEqual(carrier.projection, messageProjection(message))) {
           for (const native of carrier.messages) {

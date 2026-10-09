@@ -86,6 +86,7 @@ declare module "@earendil-works/pi-coding-agent" {
 
   export interface ExtensionAPI {
     registerProvider(provider: import("@earendil-works/pi-ai").Provider): void;
+    on(event: "session_shutdown", handler: () => void): void;
     on(event: "session_start", handler: (event: unknown, context: { hasUI: boolean; ui: { notify(message: string, level: "warning"): void } }) => void): void;
     registerProvider(name: string, config: ProviderConfig): void;
     unregisterProvider(name: string): void;
