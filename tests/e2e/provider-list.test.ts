@@ -1,11 +1,4 @@
-/**
- * E2E-01: the Pi CLI loads this extension and lists the pinned catalog.
- *
- * Justification: provider registration and the model catalog are the entry
- * point of the whole extension. When the extension entry, the manifest, or
- * the catalog breaks, every later step fails. This test proves the wiring
- * through the real `pi` binary. Fully offline, no CLI, no cost.
- */
+/** Real Pi cold-start listing must not probe Claude or invent models. */
 import { execFile } from "node:child_process";
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
@@ -47,7 +40,7 @@ function runPi(
 }
 
 test(
-  "pi lists Opus 5.5 offline without probing the Claude CLI",
+  "pi starts offline with no pinned models or Claude CLI probes",
   { timeout: 180_000 },
   async (t) => {
     const isolated = await mkdtemp(join(tmpdir(), "directsdk-offline-catalog-"));
@@ -85,12 +78,7 @@ else console.log(JSON.stringify({ loggedIn: false }));
       false,
       "offline catalog loading must not invoke the Claude CLI",
     );
-    for (const id of ["claude-opus-5-5", "sonnet", "opus", "haiku"]) {
-      assert.match(
-        stdout,
-        new RegExp(`claude-directsdk\\s+${id}\\b`),
-        `expected model "${id}" in --list-models output`,
-      );
-    }
+    assert.doesNotMatch(stdout, /claude-directsdk\s+(?:claude-|sonnet|opus|haiku)/,
+      "a cold offline start must not present a pinned catalog as current");
   },
 );

@@ -1,21 +1,12 @@
-/**
- * Setup-time probes of the user's Claude CLI: binary resolution, login state,
- * and the account's live model picker.
- *
- * Both probes are offline with respect to Anthropic: `auth status` reads the
- * local credential store, and the `initialize` handshake enumerates the
- * picker without a Messages request (the admission relay proves it by
- * counting upstream calls). Anything unexpected returns a safe fallback so
- * callers use the pinned catalog rather than failing setup.
+/** CLI resolution and request-time authentication/version probes.
+ * Catalog discovery lives in discovery.ts and never calls synchronous probes.
  */
 
 import { spawnSync } from "node:child_process";
-import { accessSync, constants, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { accessSync, constants } from "node:fs";
 import { delimiter, join } from "node:path";
-import { AdmissionRelay } from "./admission.js";
 import { LOGIN_HINT, INSTALL_HINT } from "./errors.js";
-import { nativeModel, parseCliVersion, cliVersionSupported } from "./models.js";
+import { parseCliVersion, cliVersionSupported } from "./models.js";
 
 export interface SetupStatus {
   available: boolean;
@@ -24,13 +15,6 @@ export interface SetupStatus {
   detail: string;
   loginCommand: string[] | null;
   version: string;
-}
-
-export interface DiscoveredModel {
-  id: string;
-  label: string;
-  note: string;
-  upstreamRequests: number;
 }
 
 /** Resolve the `claude` executable. Returns argv head or undefined. */
@@ -198,142 +182,4 @@ export function qualifiedCli(resolved: string[], env: NodeJS.ProcessEnv): boolea
   }
   qualifiedCache.set(key, ok);
   return ok;
-}
-
-/**
- * The account's live picker in Pi route ids, or null when the CLI is
- * missing, logged out, or the handshake fails. Makes zero upstream requests.
- */
-export async function discoverModels(options?: {
-  command?: string | string[];
-  env?: NodeJS.ProcessEnv;
-  timeoutMs?: number;
-}): Promise<DiscoveredModel[] | null> {
-  const env = options?.env ?? process.env;
-  const resolved = resolveClaude(options?.command, env);
-  if (!resolved) {
-    return null;
-  }
-  if (!setupStatus({ command: resolved, env, timeoutMs: 20000 }).loggedIn) {
-    return null;
-  }
-  const timeoutMs = options?.timeoutMs ?? 40000;
-  const relay = await AdmissionRelay.create("https://api.anthropic.com", timeoutMs);
-  const pickerCwd = mkdtempSync(join(tmpdir(), "pi-directsdk-picker-"));
-  try {
-    const child: NodeJS.ProcessEnv = {
-      ...setupChildEnv(env),
-      ANTHROPIC_BASE_URL: relay.url,
-    };
-    const [pickerBin = "", ...pickerRest] = resolved;
-    const argv = [
-      pickerBin,
-      ...pickerRest,
-      "-p",
-      "--model",
-      "sonnet",
-      "--input-format",
-      "stream-json",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-      "--tools",
-      "",
-      "--setting-sources",
-      "",
-      "--strict-mcp-config",
-      "--mcp-config",
-      '{"mcpServers":{}}',
-      "--disable-slash-commands",
-      "--no-session-persistence",
-    ];
-    const handshake = `${JSON.stringify({
-      type: "control_request",
-      request_id: "pi-picker",
-      request: { subtype: "initialize" },
-    })}\n`;
-    let rows: Array<Record<string, unknown>>;
-    try {
-      const run = spawnSync(argv[0] ?? "", argv.slice(1), {
-        env: child,
-        cwd: pickerCwd,
-        input: handshake,
-        encoding: "utf-8",
-        timeout: timeoutMs,
-        maxBuffer: 8 * 1024 * 1024,
-      });
-      const out = typeof run.stdout === "string" ? run.stdout : "";
-      rows = out
-        .split("\n")
-        .filter((line) => line.startsWith("{"))
-        .map((line) => JSON.parse(line) as Record<string, unknown>);
-    } catch {
-      return null;
-    }
-    const response = rows.find((row) => row["type"] === "control_response")?.[
-      "response"
-    ] as Record<string, unknown> | undefined;
-    const inner = response?.["response"] as Record<string, unknown> | undefined;
-    const nativeList = inner?.["models"];
-    if (relay.used || !Array.isArray(nativeList) || nativeList.length === 0) {
-      return null;
-    }
-    const account = inner?.["account"] as Record<string, unknown> | undefined;
-    const plan = String(account?.["subscriptionType"] ?? "").toLowerCase();
-    const creditBilled =
-      plan && !plan.includes("max") ? new Set(["claude-fable-5-1"]) : new Set<string>();
-    const announced = nativeList.map(
-      (row) =>
-        String(
-          (row as Record<string, unknown>)["resolvedModel"] ??
-            (row as Record<string, unknown>)["value"] ??
-            "",
-        ),
-    );
-    const longContext = new Set(
-      announced.filter((m) => m.endsWith("[1m]")).map((m) => m.slice(0, -4)),
-    );
-    const routes = new Map<string, DiscoveredModel>();
-    nativeList.forEach((rowUnknown, i) => {
-      const row = rowUnknown as Record<string, unknown>;
-      const model = announced[i] ?? "";
-      const base = model.endsWith("[1m]") ? model.slice(0, -4) : model;
-      if (!base) {
-        return;
-      }
-      let route: string;
-      try {
-        route = nativeModel(base);
-      } catch {
-        return;
-      }
-      if (!row["resolvedModel"]) {
-        // An unresolved `value` (default, best) is an alias row, not a model.
-        return;
-      }
-      if (!model.endsWith("[1m]") && longContext.has(base)) {
-        route = `${base}[1m]`;
-      }
-      const label =
-        String(row["description"] ?? "").split("·")[0]?.trim() || route;
-      const entry = routes.get(route) ?? {
-        id: route,
-        label,
-        note: "",
-        upstreamRequests: 0,
-      };
-      if (
-        String(row["description"] ?? "").toLowerCase().includes("usage credit") ||
-        creditBilled.has(base)
-      ) {
-        entry.note = "usage credits";
-      }
-      routes.set(route, entry);
-    });
-    const list = [...routes.values()];
-    return list.length > 0 ? list : null;
-  } finally {
-    rmSync(pickerCwd, { recursive: true, force: true });
-    await relay.close();
-  }
 }

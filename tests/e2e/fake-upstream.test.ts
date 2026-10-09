@@ -27,8 +27,8 @@ import type {
   TranscriptContext,
 } from "@earendil-works/pi-ai/compat";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
-import { MODELS, streamSimple } from "../../src/provider.js";
-import { collectTerminal } from "./helpers.js";
+import { streamSimple } from "../../src/provider.js";
+import { collectTerminal, fixtureModel } from "./helpers.js";
 
 const CLI = process.env["PI_DIRECTSDK_CLI"];
 const SKIP_REASON =
@@ -54,15 +54,27 @@ function context(strict = false): TranscriptContext {
         content: "You are a test assistant. Reply briefly.",
         timestamp: Date.now(),
       },
+      { role: "user", content: "Find the test value first.", timestamp: Date.now() },
+      {
+        role: "assistant", api: "openai-responses", provider: "openai", model: "foreign-model",
+        timestamp: Date.now(), stopReason: "toolUse",
+        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+        content: [
+          { type: "thinking", thinking: "Foreign reasoning context.", thinkingSignature: "foreign-signature" },
+          { type: "text", text: "I will get the test value." },
+          { type: "toolCall", id: "toolu_history", name: "codemode", arguments: { code: "return 7;" } },
+        ],
+      },
+      { role: "toolResult", toolCallId: "toolu_history", toolName: "codemode", timestamp: Date.now(),
+        isError: false, content: [{ type: "text", text: "7" }] },
       { role: "user", content: "Say hello in one sentence.", timestamp: Date.now() },
     ],
   });
 }
 
 function model(): Model<Api> {
-  const found = MODELS.find((entry) => entry.id === "sonnet");
-  assert.ok(found, "pinned catalog must contain sonnet");
-  return found as unknown as Model<Api>;
+  return fixtureModel("sonnet");
 }
 
 /** Isolated child env: fixture credentials, temp homes, no real user login. */
@@ -122,7 +134,7 @@ function toolResponse(text: string): string {
 }
 
 test(
-  "e2e-03a: grammar tool falls back to JSON schema through the real CLI",
+  "e2e-03a: foreign thinking and tool history replay through the real CLI with grammar fallback",
   { timeout: 180_000, skip: CLI ? false : SKIP_REASON },
   async () => {
     let messagePosts = 0;
@@ -163,12 +175,19 @@ test(
       assert.equal(messagePosts, 1, `expected 1 upstream request, saw ${messagePosts}`);
       const request = JSON.parse(bodies[0] ?? "{}") as {
         tools: Array<{ name: string; input_schema: unknown }>;
+        messages: Array<{ role: string; content: Array<{ type: string; text?: string; id?: string; tool_use_id?: string }> }>;
       };
       assert.deepEqual(request.tools.find((tool) => tool.name === "mcp__pi__codemode")?.input_schema, {
         type: "object",
         properties: { code: { type: "string" } },
         required: ["code"],
       });
+      const history = request.messages.flatMap(message => Array.isArray(message.content) ? message.content : []);
+      assert.ok(history.some(block => block.type === "text" && block.text?.includes("Foreign reasoning context.")),
+        "foreign thinking must reach upstream as plain assistant text");
+      assert.ok(history.some(block => block.type === "tool_use" && block.id === "toolu_history"));
+      assert.ok(history.some(block => block.type === "tool_result" && block.tool_use_id === "toolu_history"));
+      assert.ok(history.every(block => block.type !== "thinking"), "foreign signatures must never become native thinking");
       assert.equal(terminal.reason, "toolUse");
       const call = terminal.message.content.find((block) => block.type === "toolCall");
       assert.ok(call && call.type === "toolCall");

@@ -280,13 +280,12 @@ async function executeCall(
     const systemPrompt = getCurrentSystemPrompt(collapsed.messages);
     const tools = getCurrentTools(collapsed.messages);
     const history = collapsed.messages.filter((m) => m.role !== "system");
-    const nativeModelId = nativeModel(model.id);
+    const nativeModelId = nativeModel(model.id, model.contextWindow);
     const build = buildRequestBody({
       tools,
       toolChoice: options.toolChoice,
       reasoning: options.reasoning,
       thinkingLevelMap: model.thinkingLevelMap,
-      nativeModelId,
       maxTokens: options["maxTokens"] as number | undefined,
     });
     const { frames } = prepareHistory(history, new Set(build.toolNames));

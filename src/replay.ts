@@ -6,7 +6,8 @@
  * Historical user frames use `shouldQuery: false` with zero-turn
  * acknowledgments; only the final frame may generate.
  *
- * Unsupported history is rejected, never flattened into prose. Signed native
+ * Thinking without a valid carrier is replayed as text. Other unsupported
+ * history is rejected, never flattened into prose. Signed native
  * thinking survives only inside a durable carrier attached to the Pi
  * assistant message, and only while the visible projection is unchanged.
  */
@@ -206,8 +207,8 @@ export function prepareHistory(
           }
           break;
         }
-        // No (or stale) carrier: the visible content must map to native
-        // blocks directly. Thinking without a signature cannot be replayed.
+        // Without a matching carrier, preserve thinking as ordinary text.
+        // Foreign or stale signatures must never become native thinking.
         const blocks: NativeContentBlock[] = [];
         for (const block of message.content) {
           if (block.type === "text") {
@@ -215,10 +216,9 @@ export function prepareHistory(
               blocks.push({ type: "text", text: block.text });
             }
           } else if (block.type === "thinking") {
-            throw replayError(
-              "Assistant thinking without a native signature cannot be replayed; " +
-                "compact or restart the session to continue with this provider",
-            );
+            if (block.thinking) {
+              blocks.push({ type: "text", text: block.thinking });
+            }
           } else if (block.type === "toolCall") {
             if (allowedToolNames && !allowedToolNames.has(block.name)) {
               throw replayError(`Tool call outside the current inventory: ${block.name}`);

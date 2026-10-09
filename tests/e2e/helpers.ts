@@ -8,6 +8,8 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
+  Api,
+  Model,
   AssistantMessageEvent,
   AssistantMessageEventStream,
 } from "@earendil-works/pi-ai/compat";
@@ -64,4 +66,15 @@ export async function collectTerminal(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Explicit transport fixture, independent of catalog discovery and pricing. */
+export function fixtureModel(id = "sonnet"): Model<Api> {
+  return {
+    id, name: "Transport fixture", api: "claude-directsdk",
+    provider: "claude-directsdk", baseUrl: "process://claude-directsdk",
+    reasoning: true, thinkingLevelMap: { minimal: "low", low: "low", high: "high" },
+    input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 32000,
+    cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  };
 }
