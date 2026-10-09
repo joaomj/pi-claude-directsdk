@@ -32,7 +32,7 @@ The harness runs offline model listing through the installed Pi. It checks the p
 python3 scripts/verify.py fresh --paid
 ```
 
-The harness starts a real Pi session and requests a short `hi` response from Haiku 5.5. It checks the assistant’s terminal result, not only the process exit code. Pi can exit successfully after a model error.
+The harness starts a real Pi session and requests a short greeting from Haiku 5.5. It requires a successful terminal response, nonempty visible text, and output usage. It does not require exact model wording. Pi can exit successfully after a model error.
 
 ### Complete existing-session replay
 

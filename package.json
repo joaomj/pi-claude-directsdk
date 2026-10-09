@@ -1,6 +1,6 @@
 {
   "name": "pi-claude-directsdk",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "description": "Claude as a Pi model provider through the unmodified Claude Code executable. Pi owns the transcript and tools; the CLI supplies subscription authentication as a model transport.",
   "license": "MIT",

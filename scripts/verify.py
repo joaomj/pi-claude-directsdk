@@ -104,7 +104,7 @@ def run(args):
                 os.chmod(snapshot, 0o600)
                 command += ["--fork", str(snapshot)]
                 report({"session_snapshot_bytes": len(data), "source_session": str(session_source)})
-            command += ["--", "For this verification only, reply exactly hi. Do not call tools."]
+            command += ["--", "For this verification only, reply with a short greeting. Do not call tools."]
 
         # Use the real working folder, copied settings/credentials, and tools.
         # Only the DirectSDK extension source changes; no provider is fabricated.
@@ -179,11 +179,14 @@ def run(args):
         else:
             text = "".join(block.get("text", "") for block in (message or {}).get("content", [])
                            if block.get("type") == "text")
-            success = success and message is not None and message.get("stopReason") == "stop" and text.strip().lower() == "hi"
+            success = (success and message is not None and message.get("stopReason") == "stop"
+                       and bool(text.strip()) and message.get("usage", {}).get("output", 0) > 0)
         report({"success": success, "exit_code": process.returncode, "timed_out": timed_out,
                 "seconds": round(time.monotonic() - started, 3), "stderr_bytes": state["stderr_bytes"],
                 "assistant_stop": (message or {}).get("stopReason"),
                 "assistant_error": (message or {}).get("errorMessage"),
+                "response_characters": sum(len(block.get("text", "")) for block in (message or {}).get("content", [])
+                                           if block.get("type") == "text"),
                 "usage": (message or {}).get("usage"),
                 "replay_acknowledgments": sum(row.get("kind") == "native-result" and row.get("turns") == 0 for row in records),
                 "native_final_results": final_results})
