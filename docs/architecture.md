@@ -124,6 +124,9 @@ The catalog has no hand-written model inventory, aliases, limits, or price table
 - [Anthropic’s model overview](https://platform.claude.com/docs/en/about-claude/models/overview) and linked model pages for canonical routes and capabilities.
 - [Anthropic’s pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing) for token prices, request-wide tiers, and cache lifetimes.
 - [Anthropic’s effort documentation](https://platform.claude.com/docs/en/build-with-claude/effort) for web-only model effort levels.
+- [Anthropic’s mid-conversation documentation](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages) for the models that accept mid-conversation tool additions and removals.
+
+No imported model table sets a capability. `supportsNativeToolChanges` reads the flag the catalog writes on the model; a model that Anthropic does not list, or a page whose wording the catalog cannot parse, keeps the collapsed request shape and reports a warning instead of a guess.
 
 Verified context windows control native `[1m]` selection. Claude Code owns thinking mode; the request body sends only an effort level that the catalog supports. Missing metadata is never replaced with a guessed limit or a zero price.
 

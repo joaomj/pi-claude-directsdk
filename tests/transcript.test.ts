@@ -47,9 +47,9 @@ function conversation(): Message[] {
 }
 
 test("gates the native tool-change plan on model metadata and tool redefinitions", () => {
-  assert.equal(supportsNativeToolChanges("claude-opus-5"), true);
-  assert.equal(supportsNativeToolChanges("claude-opus-5[1m]"), true);
-  assert.equal(supportsNativeToolChanges("claude-haiku-4-5-20251001"), false);
+  assert.equal(supportsNativeToolChanges({ supportsMidConvoToolChanges: true }), true);
+  assert.equal(supportsNativeToolChanges({ supportsMidConvoToolChanges: false }), false);
+  assert.equal(supportsNativeToolChanges(undefined), false);
   assert.equal(prepareNativeTranscript(conversation(), false), undefined);
   assert.equal(
     prepareNativeTranscript(

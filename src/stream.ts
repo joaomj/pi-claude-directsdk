@@ -341,7 +341,7 @@ async function executeCall(
       ? undefined
       : prepareNativeTranscript(
           context.messages,
-          supportsNativeToolChanges(model.id, model.compat),
+          supportsNativeToolChanges(model.compat),
         );
     const collapsed = collapseSystemMessages(context);
     const initialSystem = getInitialSystemMessage(context.messages);
