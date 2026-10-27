@@ -16,6 +16,7 @@
 | History cannot be replayed | `replay` | Compact or restart the session. Common causes: an empty assistant message, assistant prefill, an unsupported content block, or a tool call outside the current inventory on a model without mid-conversation tool changes. |
 | Prompt is too long | `native` | Read the reported route and context window. Remove stale `contextWindow` overrides in `models.json` to use verified limits, or compact the session. |
 | Native request failed | `native` | Read the native detail in the message. |
+| `Response was truncated before completion` and no answer | `native` | The turn spent its whole output budget on thinking. Lower the thinking level or switch models, then retry. |
 | Upstream response incomplete | `upstream` | Retry the request. |
 | Request timed out | `timeout` | Retry the request. The default timeout is 180 seconds. |
 | Request cancelled | `cancelled` | Re-run the request. Cancel kills the full child process tree. |
@@ -46,6 +47,7 @@ Check cache-read share in message diagnostics across a stable, sufficiently long
 | `CLAUDE_DIRECTSDK_COMMAND` | User | Override the `claude` executable path or argv head. Used by `resolveClaude`. |
 | `CLAUDE_DIRECTSDK_CONFIG_DIR` | User | Logged-in config directory. Mapped to `CLAUDE_CONFIG_DIR` for children and setup probes. Never forwarded under its own name. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | User | Token from `claude setup-token` for environments without an interactive login. |
+| `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | Provider | The model's `maxTokens`, or Pi's per-call override. Claude Code replaces the request's `max_tokens` with its own default of 32,000 for models missing from its table, so the model limit reaches the child through this variable. |
 | `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` | User | Set to `1` to allow turns that Claude Code reports as charged to usage credits. Unset or `0` stops later turns after overage. |
 | `PI_DIRECTSDK_TEST_UPSTREAM` | Development only | Bypass the subscription environment guard for an explicit custom endpoint. Never set it in normal subscription use. |
 

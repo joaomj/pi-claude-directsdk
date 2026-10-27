@@ -351,12 +351,18 @@ async function executeCall(
     const tools = getCurrentTools(context.messages);
     const history = (nativeTranscript ? context.messages : collapsed.messages)
       .filter((m) => m.role !== "system");
+    // Pi's per-call override wins; otherwise the model's catalog limit must
+    // reach the child. Claude Code replaces the request's max_tokens with its
+    // own default (32,000 for models missing from its table), so a model limit
+    // that never leaves Pi caps the turn far below the catalog value.
+    const maxTokens =
+      typeof options["maxTokens"] === "number" ? options["maxTokens"] : model.maxTokens;
     const build = buildRequestBody({
       tools,
       toolChoice: options.toolChoice,
       reasoning: options.reasoning,
       thinkingLevelMap: model.thinkingLevelMap,
-      maxTokens: options["maxTokens"] as number | undefined,
+      maxTokens,
     });
     if (nativeTranscript) {
       build.body["tools"] = nativeTranscript.requestTools;
@@ -926,6 +932,18 @@ async function executeCall(
     output.stopReason = mapped.stopReason;
     if (mapped.errorMessage) {
       output.errorMessage = mapped.errorMessage;
+    }
+    // A turn can spend its entire output budget on thinking and return no text
+    // and no tool call. Pi would publish an empty message and a generic
+    // truncation notice that names no cause, so fail with the cause instead.
+    const answered = output.content.some(
+      (block) => (block.type === "text" && block.text.trim() !== "") || block.type === "toolCall",
+    );
+    if (stop === "max_tokens" && !answered) {
+      throw nativeError(
+        `${model.id} spent its whole output budget on thinking and returned no answer. ` +
+          "Lower the thinking level or switch models, then retry.",
+      );
     }
 
     const projection = messageProjection(output);
