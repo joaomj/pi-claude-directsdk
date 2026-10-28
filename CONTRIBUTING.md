@@ -19,7 +19,8 @@ See [SECURITY.md](SECURITY.md) for scope and reporting guidance.
 
 ## Issue handling
 
-New issues receive a type label and `needs-triage`. They remain unassigned until the maintainer takes ownership.
+New issues receive a type label, `needs-triage`, and an assignment to the maintainer.
+The label, not the assignment, shows triage state.
 The maintainer uses `needs-info` when a report needs more information and `confirmed` for a verified problem.
 
 Only issues labeled `needs-info` are eligible for inactivity cleanup.

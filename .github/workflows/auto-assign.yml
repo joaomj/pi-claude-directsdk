@@ -1,0 +1,35 @@
+# Assign every new issue and pull request to the maintainer.
+#
+# Assignment here is a notification, not a claim of ownership: labels such as
+# needs-triage and confirmed carry triage state. Pull requests use
+# pull_request_target so a fork's pull request gets a writable token; the job
+# runs no repository code and installs nothing.
+
+name: Auto-assign
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Assign the maintainer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          ASSIGNEE: joaomj
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GH_REPO}/issues/${NUMBER}/assignees" \
+            -f "assignees[]=${ASSIGNEE}" --jq '.assignees[].login'
