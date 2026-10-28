@@ -82,6 +82,8 @@ function model(): Model<Api> {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200_000,
     maxTokens: 8_192,
+    // The catalog sets this from Anthropic's published model list.
+    compat: { supportsMidConvoToolChanges: true },
   };
 }
 

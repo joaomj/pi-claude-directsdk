@@ -7,6 +7,7 @@ const ROOT = "https://platform.claude.com/docs/en";
 const OVERVIEW = `${ROOT}/about-claude/models/overview.md`;
 const PRICING = `${ROOT}/about-claude/pricing.md`;
 const EFFORT = `${ROOT}/build-with-claude/effort.md`;
+const MID_CONVERSATION = `${ROOT}/build-with-claude/mid-conversation-system-messages.md`;
 const LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 
 type ChatModel = Model<Api>;
@@ -144,10 +145,38 @@ function thinkingMap(name: string, thinking: string, defaultEffort: string | und
   };
 }
 
+/**
+ * Models Anthropic lists for mid-conversation tool changes. The page states
+ * which models carry mid-conversation system messages, then makes tool changes
+ * available on the same models. A page that no longer says so yields no
+ * capability, never a guess.
+ */
+function toolChangeModels(page: string): Set<string> {
+  const text = page.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  // Model names carry version dots ("Claude Haiku 5.5"), so a sentence-ending
+  // period is one that is not followed by a digit.
+  const availability = /This feature is available on ((?:[^.]|\.\d)+)\./.exec(text)?.[1];
+  if (!availability) throw new Error("missing mid-conversation model availability");
+  if (!/Mid-conversation tool changes.{0,80}are in beta on the same models/.test(text)) {
+    throw new Error("missing mid-conversation tool change availability");
+  }
+  const names = availability.split(/,\s*(?:and\s+)?|\s+and\s+/).map(name => name.trim()).filter(Boolean);
+  if (names.length === 0) throw new Error("empty mid-conversation model availability");
+  return new Set(names);
+}
+
 export async function loadWebCatalog(picker: DiscoveredModel[], signal: AbortSignal): Promise<CatalogResult> {
-  const [overview, prices, efforts] = await Promise.all([
+  const [overview, prices, efforts, midConversation] = await Promise.all([
     document(OVERVIEW, signal), document(PRICING, signal), document(EFFORT, signal),
+    document(MID_CONVERSATION, signal),
   ]);
+  const warnings: string[] = [];
+  let toolChanges: Set<string> = new Set();
+  try {
+    toolChanges = toolChangeModels(midConversation);
+  } catch (error) {
+    warnings.push(`mid-conversation tool changes: ${error instanceof Error ? error.message : error}`);
+  }
   const promptCache = cacheLifetimes(prices);
   const overviewTables = tables(overview);
   const current = overviewTables.find(table => table[0]?.[0] === "Feature")?.find(row => row[0] === "Claude API ID")?.slice(1);
@@ -163,7 +192,6 @@ export async function loadWebCatalog(picker: DiscoveredModel[], signal: AbortSig
   }
   const ids = [...new Set([...current, ...picker.map(row => row.id)])];
   const models: ChatModel[] = [];
-  const warnings: string[] = [];
   // Bound concurrent document requests independently of future catalog size.
   for (let start = 0; start < ids.length; start += 4) {
     await Promise.all(ids.slice(start, start + 4).map(async id => {
@@ -192,6 +220,7 @@ export async function loadWebCatalog(picker: DiscoveredModel[], signal: AbortSig
           maxTokens: tokenLimit(value("Max output"), "output limit"),
           cost: pricingFor(link.name, pricing),
           promptCache,
+          ...(toolChanges.has(link.name) ? { compat: { supportsMidConvoToolChanges: true } } : {}),
         };
         models.push(model);
         for (const alias of picker.filter(row => row.id === id && row.alias !== id)) {

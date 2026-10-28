@@ -1,0 +1,48 @@
+name: Upstream watch
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: Days to scan while no previous report exists.
+        default: "30"
+      max_reported:
+        description: Maximum number of items to list in one comment.
+        default: "15"
+      dry_run:
+        description: Print the report without posting it.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Scan the upstream tracker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Report new upstream issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TRACKER_REPO: ${{ github.repository }}
+          UPSTREAM_REPO: anthropics/claude-code
+          LOOKBACK_DAYS: ${{ inputs.lookback_days || '30' }}
+          MAX_REPORTED: ${{ inputs.max_reported || '15' }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        shell: bash
+        run: bash scripts/upstream-watch.sh

@@ -23,6 +23,29 @@ See [contribution guidance](../CONTRIBUTING.md) for the reporter-facing policy.
 Public contributions are issue-only. If an unsolicited pull request arrives, explain that policy and close it.
 Maintainer pull requests remain available for branch review and CI.
 
+## Watch the upstream tracker
+
+`.github/workflows/upstream-watch.yml` runs daily and appends upstream
+[anthropics/claude-code](https://github.com/anthropics/claude-code) issues to a single
+`Upstream Claude Code watch` issue. It looks for two kinds of report:
+
+- A literal identifier this transport writes or reads: the billing identity label, the
+  `CLAUDE_CODE_*` variables the child receives, `isUsingOverage`, or `unifiedWindows`.
+- A report about the SDK, `claude -p`, or headless use that also discusses metering. Reports
+  about the desktop app, VS Code, Cowork, and other clients stay out of this group.
+
+Search hits are only a recall step, because GitHub search treats hyphens and underscores as
+word breaks. Relevance is decided on the raw issue text. The tracker issue body holds the last
+scan date and the numbers already reported, so a rerun never repeats an item, and that issue
+doubles as the archive. Deleting the state marker stops the job rather than duplicating the
+archive.
+
+The same job reports when the published `@anthropic-ai/claude-code` version leaves
+`QUALIFIED_CLI_RANGE`. That is the signal to repeat the verification in [testing.md](testing.md).
+
+Run the workflow manually from the Actions tab to preview a report with `dry_run`. Set
+`lookback_days` to widen the window, which applies only while no previous report exists.
+
 ## Develop on branches
 
 Push work to a branch. CI checks types and compilation on branch pushes and pull requests targeting `main`.
