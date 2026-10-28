@@ -1,0 +1,22 @@
+name: AI review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ai-review:
+    uses: joaomj/pi-agent-config/.github/workflows/ai-review.yml@5b09c4ab50cca7448c46eb28e4a42203edb67c86
+    with:
+      config-ref: "5b09c4ab50cca7448c46eb28e4a42203edb67c86"
+    secrets:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
