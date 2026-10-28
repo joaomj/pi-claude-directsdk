@@ -15,8 +15,8 @@ concurrency:
 
 jobs:
   ai-review:
-    uses: joaomj/pi-agent-config/.github/workflows/ai-review.yml@f99019f742406e5cde25936676ed0f769d56fb8f
+    uses: joaomj/pi-agent-config/.github/workflows/ai-review.yml@5b09c4ab50cca7448c46eb28e4a42203edb67c86
     with:
-      config-ref: "f99019f742406e5cde25936676ed0f769d56fb8f"
+      config-ref: "5b09c4ab50cca7448c46eb28e4a42203edb67c86"
     secrets:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
