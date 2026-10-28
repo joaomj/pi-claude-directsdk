@@ -10,7 +10,11 @@ Use these issue searches:
 
 Remove `needs-triage` after reviewing an issue. Use `needs-info` only when specific information is missing.
 Remove `needs-info` and `awaiting-response` when the requested information arrives. Use `confirmed` for verified problems.
-Assign an issue to yourself when taking ownership. Link duplicates to the existing issue before closing them.
+Link duplicates to the existing issue before closing them.
+
+New issues and pull requests are assigned to the maintainer by
+`.github/workflows/auto-assign.yml`. Assignment is therefore a notification, not a claim of
+ownership; the labels carry triage state.
 
 The daily cleanup workflow only handles `needs-info` issues. It reminds after 30 inactive days and closes after another 14.
 Confirmed issues and milestone issues are exempt. The workflow does not clean up pull requests.
