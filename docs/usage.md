@@ -58,6 +58,11 @@ which Anthropic can change without notice. If Anthropic classifies unrecognized 
 third-party traffic, the [usage-credit guard](#usage-credit-guard) stops later turns, but not
 the first charged one.
 
+## Cost reporting
+
+Pi's per-model costs are estimates from [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing),
+not subscription charges. Failed or interrupted requests are never reported as free.
+
 ## Usage-credit guard
 
 Claude Code can report that a turn used pay-as-you-go usage credits instead of plan limits. When that report arrives, DirectSDK stops the turn with a `billing` error unless `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` is set. The error includes the reported status and reset time.

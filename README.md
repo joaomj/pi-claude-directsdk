@@ -1,12 +1,12 @@
 # Pi Claude DirectSDK
 
 [![CI](https://github.com/joaomj/pi-claude-directsdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/joaomj/pi-claude-directsdk/actions/workflows/ci.yml?query=branch%3Amain)
-[![Release workflow](https://github.com/joaomj/pi-claude-directsdk/actions/workflows/release.yml/badge.svg)](https://github.com/joaomj/pi-claude-directsdk/actions/workflows/release.yml)
 [![npm version](https://img.shields.io/npm/v/pi-claude-directsdk.svg)](https://www.npmjs.com/package/pi-claude-directsdk)
-[![Node.js requirement](https://img.shields.io/node/v/pi-claude-directsdk)](#requirements)
 [![License](https://img.shields.io/github/license/joaomj/pi-claude-directsdk)](LICENSE)
 
-Use Claude inside Pi through the unmodified Claude Code executable. Pi owns the transcript, tools, approvals, and retries. The CLI supplies subscription authentication as a model transport.
+Use Claude inside Pi through the unmodified Claude Code executable. Pi owns the transcript, tools, approvals, and retries; the CLI supplies subscription authentication as a model transport.
+
+Each request starts a fresh `claude -p` process that replays Pi's history with an explicit cache anchor, and every tool call returns to Pi for execution. Three measurements recorded 99.6% to 99.8% cache-read share on warm turns; see [transport measurements](docs/transport-measurements.md) for the workloads and their limits.
 
 ## Requirements
 
@@ -18,71 +18,38 @@ Use Claude inside Pi through the unmodified Claude Code executable. Pi owns the 
 
 ## Install
 
-Install the qualified Claude Code version:
+Install the qualified Claude Code version, then sign in through the official CLI:
 
 ```sh
 npm install -g --ignore-scripts=false @anthropic-ai/claude-code@2.1.281
-```
-
-Sign in through the official CLI login:
-
-```sh
 claude auth login
 ```
 
-Install the extension from npm:
+Install the extension from npm, or from Git instead, but not both:
 
 ```sh
 pi install npm:pi-claude-directsdk
+pi install git:github.com/joaomj/pi-claude-directsdk  # alternative source
 ```
 
-Alternatively, install from Git. Choose one source, not both:
-
-```sh
-pi install git:github.com/joaomj/pi-claude-directsdk
-```
-
-Start or restart interactive Pi, open `/model`, and wait for the DirectSDK catalog refresh. Select a DirectSDK model. On a fresh install, this step must complete before selecting the model from the command line.
-
-`pi update --models` does not load this extension in Pi 1.3.0; use the interactive model picker for DirectSDK refresh. After a successful refresh, later invocations can use the saved catalog:
-
-```sh
-pi --model claude-directsdk/haiku
-```
+Start or restart interactive Pi, open `/model`, and wait for the DirectSDK catalog refresh. On a fresh install, this step must complete before selecting the model from the command line; later invocations can use the saved catalog, for example `pi --model claude-directsdk/haiku`.
 
 DirectSDK uses the CLI login, not the Pi Anthropic login. The `npm install` flag enables the Claude Code installer for that command only.
 
-The model catalog does not guarantee account entitlement. Start with `haiku` for a small request. Models that require usage credits can incur separate charges. DirectSDK stops a turn when Claude Code reports that it used usage credits, but it cannot undo the charge for that turn. To use only the included subscription allowance, disable additional paid usage in your Claude account. Set `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` only when you intend to allow usage credits.
+The model catalog does not guarantee account entitlement. Start with `haiku` for a small request. Models that require usage credits can incur separate charges, and DirectSDK cannot undo a charge that Claude Code already reported. See [usage credits](docs/usage.md#usage-credit-guard).
 
 ## Upgrade
 
-Update the source you installed:
-
 ```sh
-# npm installation
-pi update npm:pi-claude-directsdk
-
-# Git installation
-pi update git:github.com/joaomj/pi-claude-directsdk
+pi update npm:pi-claude-directsdk                              # npm installation
+pi update git:github.com/joaomj/pi-claude-directsdk            # Git installation
 ```
 
-Run only the command for your source; `pi list` shows installed declarations. Version-pinned sources remain pinned when updated. To change a pin or switch sources, remove the old declaration with `pi remove <old-source>`, then install the desired source. Do not keep both npm and Git installations.
-
-Restart Pi after upgrading, then open `/model` and wait for catalog refresh.
-
-## Cache improvements
-
-Since v0.1.7, an explicit historical cache anchor lets stable conversation history reuse the upstream prompt cache. A stable native working directory also preserves the native prefix across Pi restarts.
-
-Measured cache-read shares were **99.59% and 99.71% on two warm turns**, and **99.84% after restarting Pi** in a separate Linux verification. Every call still sends Pi's conversation history and starts a fresh Claude process.
-
-These repository-reported results depend on stable inputs, cache lifetime, and upstream availability. They measure token reuse, not subscription allowance deductions, guaranteed savings, or a speed advantage over Bridge. See the [measurement report](docs/transport-measurements.md) for workloads and limits.
-
-Pi's per-model costs are estimates from [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing), not subscription charges. Failed or interrupted requests are never reported as free.
+Run only the command for your source; `pi list` shows installed declarations. Version-pinned sources remain pinned when updated, so change a pin or switch sources with `pi remove <old-source>` and a fresh install. Restart Pi afterwards, then open `/model` and wait for catalog refresh.
 
 ## Comparison with other Claude providers
 
-Three extensions expose the Claude subscription through Claude Code while Pi owns the session. This table reflects the current DirectSDK development branch, [pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge) 0.9.3, and [pi-claude-code](https://github.com/earendil-works/pi-claude-code) 0.1.0 (experimental) as of October 23, 2026.
+Three extensions expose the Claude subscription through Claude Code while Pi owns the session. This table reflects DirectSDK `main`, [pi-claude-bridge](https://github.com/elidickinson/pi-claude-bridge) 0.9.3, and [pi-claude-code](https://github.com/earendil-works/pi-claude-code) 0.1.0 (experimental) as of October 23, 2026.
 
 | | DirectSDK | pi-claude-bridge | pi-claude-code |
 |---|---|---|---|
@@ -92,30 +59,19 @@ Three extensions expose the Claude subscription through Claude Code while Pi own
 | Latency and cache | 99.6–99.8% cache-read share on warm turns | Query continues across tool calls; rebuilds miss the cache | Warm text turns skip startup; tool loops replay |
 | Models | CLI picker plus Anthropic docs, with verified prices | pi-ai Anthropic catalog, updated automatically | CLI discovery plus fallback metadata |
 
-DirectSDK requires Claude Code `>=2.1.263 <2.2.0`; pi-claude-bridge requires Pi `>=0.86.1`; pi-claude-code requires Claude Code installed and accepts the installed version. All three use a Claude Code login for subscription access.
-
-All three draw on the same subscription and can be affected by Anthropic billing changes. None has a matched performance benchmark. Using the official CLI or SDK does not establish Anthropic approval of any extension. See the [full Bridge comparison](docs/comparison.md) for source-level transport and policy detail.
+DirectSDK requires Claude Code `>=2.1.263 <2.2.0`; pi-claude-bridge requires Pi `>=0.86.1`; pi-claude-code accepts the installed Claude Code version. All three use a Claude Code login, draw on the same subscription, and can be affected by Anthropic billing changes. None has a matched performance benchmark. See the [full comparison](docs/comparison.md) for source-level detail.
 
 ## Documentation
 
-- [Usage and configuration](docs/usage.md): local checkout, environment settings, diagnostics, and verification.
-- [Architecture](docs/architecture.md): request lifecycle diagram, model routing, tool transport, and admission relay.
-- [Startup](docs/startup.md): catalog refresh, cache-only initialization, and lazy loading.
-- [Troubleshooting](docs/troubleshooting.md): missing CLI, login, and conflicting environment settings.
-- [Testing](docs/testing.md): the offline regression suite, verified environments, and paid replay scenarios. Offline startup was verified on Pi 1.3.0; paid conversation checks used Pi 1.2.0 and have not been repeated on 1.3.0.
-- [Transport measurements](docs/transport-measurements.md): timing baseline, warm-cache reuse, and measurement limits.
-- [Full Bridge comparison](docs/comparison.md): transport, state, caching, authentication, and policy trade-offs.
+- [Usage and configuration](docs/usage.md): local checkout, environment settings, costs, diagnostics, and verification.
+- [Architecture](docs/architecture.md): request lifecycle, model routing, tool transport, and admission relay.
+- [Troubleshooting](docs/troubleshooting.md): missing CLI, login, version, and conflicting environment settings.
+- [Testing](docs/testing.md), [startup](docs/startup.md), [transport measurements](docs/transport-measurements.md), and the [full Bridge comparison](docs/comparison.md).
 
 ## Issues and security
 
-Bug reports, feature requests, and questions are welcome through [issue forms](https://github.com/joaomj/pi-claude-directsdk/issues/new/choose).
-This project does not accept unsolicited public pull requests. See [contribution guidance](CONTRIBUTING.md).
-Report vulnerabilities privately as described in the [security policy](SECURITY.md).
+Bug reports, feature requests, and questions are welcome through [issue forms](https://github.com/joaomj/pi-claude-directsdk/issues/new/choose). This project does not accept unsolicited public pull requests; see [contribution guidance](CONTRIBUTING.md). Report vulnerabilities privately as described in the [security policy](SECURITY.md).
 
-## Acknowledgments
+## Acknowledgments and license
 
-Behavioral reference: [Hermes Claude Subscription DirectSDK](https://github.com/NousResearch/hermes-plugin-claude-subscription-directsdk) (MIT). This project copies its behavior contract, not its code.
-
-## License
-
-MIT. See `LICENSE`.
+Behavioral reference: [Hermes Claude Subscription DirectSDK](https://github.com/NousResearch/hermes-plugin-claude-subscription-directsdk) (MIT). This project copies its behavior contract, not its code. DirectSDK is MIT licensed; see `LICENSE`.
