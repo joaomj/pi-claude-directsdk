@@ -49,6 +49,7 @@ Check cache-read share in message diagnostics across a stable, sufficiently long
 | `CLAUDE_CODE_OAUTH_TOKEN` | User | Token from `claude setup-token` for environments without an interactive login. |
 | `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | Provider | The model's `maxTokens`, or Pi's per-call override. Claude Code replaces the request's `max_tokens` with its own default of 32,000 for models missing from its table, so the model limit reaches the child through this variable. |
 | `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` | User | Set to `1` to allow turns that Claude Code reports as charged to usage credits. Unset or `0` stops later turns after overage. |
+| `CLAUDE_DIRECTSDK_ENTRYPOINT` | User | Client label for `cc_entrypoint`, which plan usage is metered by. Defaults to `pi-claude-directsdk` and replaces an inherited label. An empty value lets Claude Code label the session. Must be 1 to 64 characters of letters, digits, dot, underscore, or hyphen. |
 | `PI_DIRECTSDK_TEST_UPSTREAM` | Development only | Bypass the subscription environment guard for an explicit custom endpoint. Never set it in normal subscription use. |
 
 ## Subscription guard
