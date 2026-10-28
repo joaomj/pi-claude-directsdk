@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose new behavior or a change to existing behavior
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem first. A request tied to a real task is easier to judge.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you cannot do today, and what it costs you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What the tool should do instead. Include the interface if it changes.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Current workarounds, or other designs you rejected.
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope you would accept
+      options:
+        - Minimal fix for the stated problem
+        - The full proposal
+        - Open to whatever is cheapest
+      default: 0

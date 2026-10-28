@@ -1,0 +1,50 @@
+name: Bug report
+description: Report behavior that is wrong or crashes
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. One defect per issue makes it fixable.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The behavior you observed.
+      placeholder: The command exits with a stack trace instead of listing the files.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: The behavior you consider correct.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that shows the problem.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release, tag, or commit where this happens.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, runtime version, and anything else that could matter.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output, with secrets and private data removed.
+      render: shell
