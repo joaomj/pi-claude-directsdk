@@ -15,9 +15,9 @@ concurrency:
 
 jobs:
   ai-review:
-    uses: joaomj/github-ci/.github/workflows/ai-review.yml@v1.0.0
+    uses: joaomj/github-ci/.github/workflows/ai-review.yml@v1
     with:
-      ci-ref: "v1.0.0"
+      ci-ref: "v1"
       config-ref: "v0.7.2"
     secrets:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
