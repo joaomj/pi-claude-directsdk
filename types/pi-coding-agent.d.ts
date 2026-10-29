@@ -3,9 +3,9 @@
  *
  * Mirrors `@earendil-works/pi-coding-agent` 0.87.1
  * (`dist/core/extensions/types.d.ts`) for exactly the surface this project
- * uses. The real package supplies these at runtime; every import from it is
- * type-only and erased, so this shim carries zero runtime behavior. Re-check
- * the definitions when the pinned Pi version changes.
+ * uses. The real package supplies these at runtime; `getDocsPath` is also
+ * imported as a value, so the host must export it. Re-check the definitions
+ * when the pinned Pi version changes.
  */
 
 declare module "@earendil-works/pi-coding-agent" {
@@ -84,10 +84,29 @@ declare module "@earendil-works/pi-coding-agent" {
     compat?: Model<Api>["compat"];
   }
 
+  /** Absolute path to the Pi documentation directory shipped with the host. */
+  export function getDocsPath(): string;
+
+  /** Prompt state Pi hands the agent loop before the first turn. */
+  export interface BeforeAgentStartEvent {
+    systemPromptOptions: {
+      customPrompt?: string;
+      forceSystemPrompt?: string;
+      /** A key here replaces Pi's prompt section of the same name. */
+      sections: Record<string, string>;
+    };
+  }
+
+  export interface ExtensionContext {
+    /** Provider id of the model the turn will use, when a model is selected. */
+    model?: { provider: string };
+  }
+
   export interface ExtensionAPI {
     registerProvider(provider: import("@earendil-works/pi-ai").Provider): void;
     on(event: "session_shutdown", handler: () => void): void;
     on(event: "session_start", handler: (event: unknown, context: { hasUI: boolean; ui: { notify(message: string, level: "warning"): void } }) => void): void;
+    on(event: "before_agent_start", handler: (event: BeforeAgentStartEvent, context: ExtensionContext) => void): void;
     registerProvider(name: string, config: ProviderConfig): void;
     unregisterProvider(name: string): void;
   }

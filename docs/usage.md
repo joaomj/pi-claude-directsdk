@@ -53,10 +53,15 @@ from inside another Claude client would otherwise report that client's identity.
 another label, of 1 to 64 characters of letters, digits, dot, underscore, or hyphen, to report a
 different identity, or set it to an empty string to let Claude Code label the session itself.
 
-This is a workaround. An unrecognized label currently falls into the CLI's own client bucket,
-which Anthropic can change without notice. If Anthropic classifies unrecognized clients as
-third-party traffic, the [usage-credit guard](#usage-credit-guard) stops later turns, but not
-the first charged one.
+A custom label alone is not accepted for every prompt. Anthropic also rejects a request whose
+system prompt looks like another agent harness as third-party app usage, so while a DirectSDK
+model is active Pi's `<docs>` section is replaced with a short pointer to the documentation
+directory. Other providers keep Pi's prompt, and a custom prompt from `SYSTEM.md` is left alone.
+
+Both parts are a workaround for an undocumented check. An unrecognized label currently falls into
+the CLI's own client bucket, and the accepted prompt wording can change, so re-verify after a Pi
+or Claude Code update. If Anthropic classifies these requests as third-party traffic, the
+[usage-credit guard](#usage-credit-guard) stops later turns, but not the first charged one.
 
 ## Cost reporting
 
