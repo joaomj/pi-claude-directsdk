@@ -4,7 +4,8 @@ export type DirectSdkErrorKind =
   | "missing"
   | "logged-out"
   | "env-conflict"
-  | "replay"
+  | "sdk"
+  | "tool"
   | "incomplete"
   | "native"
   | "upstream"
@@ -56,8 +57,14 @@ export function envConflictError(names: string[]): DirectSdkError {
   );
 }
 
-export function replayError(detail: string): DirectSdkError {
-  return new DirectSdkError("replay", `Pi history is not replayable: ${detail}`);
+/** The SDK subprocess or its protocol failed, not the model. */
+export function sdkError(detail: string, options?: ErrorOptions): DirectSdkError {
+  return new DirectSdkError("sdk", `Claude Code transport: ${detail}`, options);
+}
+
+/** A tool call could not be attributed or delivered to Pi. */
+export function toolError(detail: string): DirectSdkError {
+  return new DirectSdkError("tool", `Pi tool bridge: ${detail}`);
 }
 
 export function incompleteError(detail: string): DirectSdkError {
