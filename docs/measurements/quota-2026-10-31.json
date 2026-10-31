@@ -1,0 +1,303 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "paddedSystemPromptChars": 33573,
+  "conversationsPerArm": 3,
+  "probes": [
+    {
+      "label": "before",
+      "fetchedAt": 1793487931761,
+      "session": {
+        "remaining": 76,
+        "resetsAt": "2026-11-01T01:10:00.645933+00:00"
+      },
+      "weekly": {
+        "remaining": 79,
+        "resetsAt": "2026-11-04T09:00:00.645952+00:00"
+      },
+      "footer": "claude 5h:76% \ufffd2h4m wk:79% \ufffd3d9h"
+    },
+    {
+      "label": "afterTransport",
+      "fetchedAt": 1793488250029,
+      "session": {
+        "remaining": 71,
+        "resetsAt": "2026-11-01T01:10:00.923838+00:00"
+      },
+      "weekly": {
+        "remaining": 79,
+        "resetsAt": "2026-11-04T09:00:00.923880+00:00"
+      },
+      "footer": "claude 5h:71% \ufffd1h59m wk:79% \ufffd3d9h"
+    },
+    {
+      "label": "afterVanilla",
+      "fetchedAt": 1793488568293,
+      "session": {
+        "remaining": 66,
+        "resetsAt": "2026-11-01T01:10:00.163331+00:00"
+      },
+      "weekly": {
+        "remaining": 78,
+        "resetsAt": "2026-11-04T09:00:00.163354+00:00"
+      },
+      "footer": "claude 5h:66% \ufffd1h54m wk:78% \ufffd3d9h"
+    }
+  ],
+  "transport": [
+    {
+      "conversation": 0,
+      "prompt": "Name three primary colours in one line.",
+      "input": 10,
+      "output": 107,
+      "cacheRead": 12354,
+      "cacheWrite": 0,
+      "promptTokens": 12364,
+      "totalTokens": 12471,
+      "cacheReadShare": 0.9992,
+      "wallMs": 2144
+    },
+    {
+      "conversation": 0,
+      "prompt": "Now name three secondary colours that mix those, in one line.",
+      "input": 10,
+      "output": 110,
+      "cacheRead": 12354,
+      "cacheWrite": 130,
+      "promptTokens": 12494,
+      "totalTokens": 12604,
+      "cacheReadShare": 0.9888,
+      "wallMs": 1493
+    },
+    {
+      "conversation": 0,
+      "prompt": "List all six colours you have named in one comma-separated line.",
+      "input": 10,
+      "output": 108,
+      "cacheRead": 12484,
+      "cacheWrite": 134,
+      "promptTokens": 12628,
+      "totalTokens": 12736,
+      "cacheReadShare": 0.9886,
+      "wallMs": 1423
+    },
+    {
+      "conversation": 1,
+      "prompt": "Name three primary colours in one line.",
+      "input": 10,
+      "output": 119,
+      "cacheRead": 12354,
+      "cacheWrite": 0,
+      "promptTokens": 12364,
+      "totalTokens": 12483,
+      "cacheReadShare": 0.9992,
+      "wallMs": 2137
+    },
+    {
+      "conversation": 1,
+      "prompt": "Now name three secondary colours that mix those, in one line.",
+      "input": 10,
+      "output": 103,
+      "cacheRead": 12354,
+      "cacheWrite": 142,
+      "promptTokens": 12506,
+      "totalTokens": 12609,
+      "cacheReadShare": 0.9878,
+      "wallMs": 1242
+    },
+    {
+      "conversation": 1,
+      "prompt": "List all six colours you have named in one comma-separated line.",
+      "input": 10,
+      "output": 105,
+      "cacheRead": 12496,
+      "cacheWrite": 127,
+      "promptTokens": 12633,
+      "totalTokens": 12738,
+      "cacheReadShare": 0.9892,
+      "wallMs": 1433
+    },
+    {
+      "conversation": 2,
+      "prompt": "Name three primary colours in one line.",
+      "input": 10,
+      "output": 83,
+      "cacheRead": 12354,
+      "cacheWrite": 0,
+      "promptTokens": 12364,
+      "totalTokens": 12447,
+      "cacheReadShare": 0.9992,
+      "wallMs": 1665
+    },
+    {
+      "conversation": 2,
+      "prompt": "Now name three secondary colours that mix those, in one line.",
+      "input": 10,
+      "output": 75,
+      "cacheRead": 12354,
+      "cacheWrite": 106,
+      "promptTokens": 12470,
+      "totalTokens": 12545,
+      "cacheReadShare": 0.9907,
+      "wallMs": 1011
+    },
+    {
+      "conversation": 2,
+      "prompt": "List all six colours you have named in one comma-separated line.",
+      "input": 10,
+      "output": 83,
+      "cacheRead": 12460,
+      "cacheWrite": 99,
+      "promptTokens": 12569,
+      "totalTokens": 12652,
+      "cacheReadShare": 0.9913,
+      "wallMs": 1029
+    }
+  ],
+  "vanilla": [
+    {
+      "conversation": 0,
+      "prompt": "Name three primary colours in one line.",
+      "input": 10,
+      "output": 128,
+      "cacheRead": 25143,
+      "cacheWrite": 3746,
+      "promptTokens": 28899,
+      "totalTokens": 29027,
+      "cacheReadShare": 0.87,
+      "wallMs": 3400
+    },
+    {
+      "conversation": 0,
+      "prompt": "Now name three secondary colours that mix those, in one line.",
+      "input": 10,
+      "output": 107,
+      "cacheRead": 28889,
+      "cacheWrite": 924,
+      "promptTokens": 29823,
+      "totalTokens": 29930,
+      "cacheReadShare": 0.9687,
+      "wallMs": 3488
+    },
+    {
+      "conversation": 0,
+      "prompt": "List all six colours you have named in one comma-separated line.",
+      "input": 10,
+      "output": 96,
+      "cacheRead": 29813,
+      "cacheWrite": 160,
+      "promptTokens": 29983,
+      "totalTokens": 30079,
+      "cacheReadShare": 0.9943,
+      "wallMs": 3383
+    },
+    {
+      "conversation": 1,
+      "prompt": "Name three primary colours in one line.",
+      "input": 10,
+      "output": 112,
+      "cacheRead": 25143,
+      "cacheWrite": 4424,
+      "promptTokens": 29577,
+      "totalTokens": 29689,
+      "cacheReadShare": 0.8501,
+      "wallMs": 4389
+    },
+    {
+      "conversation": 1,
+      "prompt": "Now name three secondary colours that mix those, in one line.",
+      "input": 10,
+      "output": 106,
+      "cacheRead": 29567,
+      "cacheWrite": 164,
+      "promptTokens": 29741,
+      "totalTokens": 29847,
+      "cacheReadShare": 0.9941,
+      "wallMs": 3347
+    },
+    {
+      "conversation": 1,
+      "prompt": "List all six colours you have named in one comma-separated line.",
+      "input": 10,
+      "output": 78,
+      "cacheRead": 29731,
+      "cacheWrite": 159,
+      "promptTokens": 29900,
+      "totalTokens": 29978,
+      "cacheReadShare": 0.9943,
+      "wallMs": 3125
+    },
+    {
+      "conversation": 2,
+      "prompt": "Name three primary colours in one line.",
+      "input": 10,
+      "output": 122,
+      "cacheRead": 29567,
+      "cacheWrite": 0,
+      "promptTokens": 29577,
+      "totalTokens": 29699,
+      "cacheReadShare": 0.9997,
+      "wallMs": 3894
+    },
+    {
+      "conversation": 2,
+      "prompt": "Now name three secondary colours that mix those, in one line.",
+      "input": 10,
+      "output": 102,
+      "cacheRead": 29567,
+      "cacheWrite": 174,
+      "promptTokens": 29751,
+      "totalTokens": 29853,
+      "cacheReadShare": 0.9938,
+      "wallMs": 3555
+    },
+    {
+      "conversation": 2,
+      "prompt": "List all six colours you have named in one comma-separated line.",
+      "input": 10,
+      "output": 91,
+      "cacheRead": 29741,
+      "cacheWrite": 395,
+      "promptTokens": 30146,
+      "totalTokens": 30237,
+      "cacheReadShare": 0.9866,
+      "wallMs": 2642
+    }
+  ],
+  "drain": {
+    "transport": {
+      "sessionPoints": 5,
+      "weeklyPoints": 0
+    },
+    "vanilla": {
+      "sessionPoints": 5,
+      "weeklyPoints": 1
+    },
+    "note": "Points are percentage points of the window, whole numbers only. The 5h window drains across the whole run, so the second arm's share is the difference between the two probes around it."
+  },
+  "tokens": {
+    "transport": {
+      "input": 90,
+      "output": 893,
+      "cacheRead": 111564,
+      "cacheWrite": 738,
+      "promptTokens": 112392,
+      "totalTokens": 113285,
+      "costUsd": 0,
+      "wallMs": 13577,
+      "cacheReadShare": 0.9926,
+      "promptChars": 492
+    },
+    "vanilla": {
+      "input": 90,
+      "output": 942,
+      "cacheRead": 257161,
+      "cacheWrite": 10146,
+      "promptTokens": 267397,
+      "totalTokens": 268339,
+      "costUsd": 0,
+      "wallMs": 31223,
+      "cacheReadShare": 0.9617,
+      "promptChars": 492
+    }
+  }
+}

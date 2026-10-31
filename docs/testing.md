@@ -74,6 +74,7 @@ Results for the Agent SDK transport, all on the installation above:
 - `npm run measure session` and `npm run measure cache`: 98.8 to 98.9 percent cache-read share on continued turns, no cache activity below roughly 4,000 prompt tokens, and 94.9 percent reuse of the instruction prefix after a rebuild.
 - `npm run measure restart`: a new process read back the instruction prefix written by the previous one 309 ms earlier, and rewrote the flattened conversation.
 - `npm run measure compaction`: the prompt fell from 13,192 to 3,709 tokens and the first turn after compaction had no cache activity at all.
+- `npm run measure quota`: three identical conversations drained 5 points of the 5-hour window on each arm, with 112,392 prompt tokens on the transport against 267,397 on vanilla. Needs an interactive terminal for the footer probe, and 15 minutes of wall time.
 
 Not verified: cache lifetime beyond the 28-minute gap observed, conversations longer than six turns, Windows and compiled-Pi launches. Earlier releases measured the direct-CLI transport that this version replaces; those results do not carry over, because the request path and the process lifecycle changed.
 

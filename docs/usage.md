@@ -57,7 +57,9 @@ See [docs/troubleshooting.md](troubleshooting.md) for login and environment erro
 
 Claude Code reports a client label with every request, and subscription usage is metered against that label. Headless SDK sessions have been reported to consume the 5-hour window roughly 1.6 to 2.9 times faster per token than the interactive CLI for the same work; see [anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074) for the measurements and for Anthropic's silence on whether the difference is intended.
 
-DirectSDK does not set that label. The Agent SDK starts the process and supplies it, so the previous custom `pi-claude-directsdk` label is gone. This is a behavior change from the direct-CLI transport and is not verified either way for plan consumption; treat the 5-hour window as the budget that matters and watch it during your first long session.
+DirectSDK does not set that label. The Agent SDK starts the process and supplies it, so the previous custom `pi-claude-directsdk` label is gone.
+
+Measured on this transport, the per-token figure holds and the per-conversation effect does not. Three identical conversations drained 5 points of the 5-hour window on DirectSDK and 5 points on `claude -p --resume`, while DirectSDK sent 112,392 prompt tokens against vanilla's 267,397. Per conversation the two are equal; per prompt token DirectSDK drains about 2.4 times more. Sending less input therefore does not save window, and the lower cost estimate should not be read as a quota saving. See [Measurements](measurements.md).
 
 The usage-credit guard below is the backstop if Anthropic classifies these requests as third-party traffic. It stops later turns, but not the first charged one.
 

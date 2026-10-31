@@ -8,6 +8,7 @@
  *   node ... scripts/measure.mjs compaction     what Pi compaction does to the next turn
  *   node ... scripts/measure.mjs cancellation   cancel during generation, cancel
  *                                               with a parked tool call, stalled CLI
+ *   node ... scripts/measure.mjs quota          what each arm drains from the plan window
  *
  * Both modes spend real model calls on the operator's own login. Results are
  * printed as JSON so they can be quoted in the documentation without retyping.
@@ -16,7 +17,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
@@ -267,16 +268,20 @@ async function sessionMode(options = {}) {
 
 function total(turns) {
   const sum = turns.reduce(
-    (acc, turn) => ({
-      input: acc.input + turn.usage.input,
-      output: acc.output + turn.usage.output,
-      cacheRead: acc.cacheRead + turn.usage.cacheRead,
-      cacheWrite: acc.cacheWrite + turn.usage.cacheWrite,
-      promptTokens: acc.promptTokens + (turn.promptTokens ?? 0),
-      totalTokens: acc.totalTokens + (turn.totalTokens ?? 0),
-      costUsd: turn.costUsd ?? acc.costUsd,
-      wallMs: acc.wallMs + turn.wallMs,
-    }),
+    (acc, turn) => {
+      // Turns carry either a native `usage` object or the flattened summary.
+      const usage = turn.usage ?? turn;
+      return {
+        input: acc.input + usage.input,
+        output: acc.output + usage.output,
+        cacheRead: acc.cacheRead + usage.cacheRead,
+        cacheWrite: acc.cacheWrite + usage.cacheWrite,
+        promptTokens: acc.promptTokens + (turn.promptTokens ?? 0),
+        totalTokens: acc.totalTokens + (turn.totalTokens ?? 0),
+        costUsd: turn.costUsd ?? acc.costUsd,
+        wallMs: acc.wallMs + turn.wallMs,
+      };
+    },
     { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, promptTokens: 0, totalTokens: 0, costUsd: 0, wallMs: 0 },
   );
   return {
@@ -646,6 +651,172 @@ async function compactionMode() {
   return report;
 }
 
+/**
+ * Plan-window drain.
+ *
+ * Reads the snapshot that @joaomj/pi-claude-usage writes to the XDG cache after
+ * querying GET api.anthropic.com/api/oauth/usage. The extension does the token
+ * work; this script only reads the percentages it stored, so no credential is
+ * opened here. The endpoint reports whole percent, so one point is the finest
+ * reading available.
+ */
+const USAGE_CACHE = join(
+  process.env.XDG_CACHE_HOME || join(homedir(), ".cache"),
+  "pi-claude-usage.json",
+);
+
+function usageSnapshot() {
+  let raw;
+  try {
+    raw = JSON.parse(readFileSync(USAGE_CACHE, "utf8"));
+  } catch {
+    return null;
+  }
+  const entries = Object.values(raw).filter(
+    (entry) => entry && typeof entry.fetchedAt === "number",
+  );
+  if (entries.length === 0) return null;
+  return entries.sort((a, b) => b.fetchedAt - a.fetchedAt)[0];
+}
+
+/**
+ * Refresh the footer snapshot and read what the extension stored.
+ *
+ * @joaomj/pi-claude-usage only activates when Pi runs in its TUI (`ctx.mode ===
+ * "tui"`), and it refreshes at startup only when its cached snapshot is older
+ * than five minutes. So the probe waits for that staleness, then opens a real
+ * TUI inside a detached `screen` session and lets the extension fetch fresh
+ * numbers. This script reads the stored percentages; it never opens the
+ * credential file the extension uses.
+ */
+const USAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function quotaProbe(label) {
+  const screen = (args) => spawnSync("screen", args, { encoding: "utf8" });
+
+  // The extension skips its startup refresh while the snapshot is fresh.
+  const current = usageSnapshot();
+  if (current) {
+    const staleAt = current.fetchedAt + USAGE_CACHE_TTL_MS + 15_000;
+    if (staleAt > now()) {
+      log("quota probe", label, `waiting ${Math.ceil((staleAt - now()) / 1000)}s for the cached snapshot to expire`);
+      await new Promise((resolve) => setTimeout(resolve, staleAt - now()));
+    }
+  }
+
+  const before = usageSnapshot();
+  const name = `piquota-${label}-${process.pid}`;
+  screen(["-dmS", name, "pi", "--model", `claude-directsdk/${MODEL}`]);
+  try {
+    const deadline = now() + 120_000;
+    while (now() < deadline) {
+      const snap = usageSnapshot();
+      if (snap && (!before || snap.fetchedAt > before.fetchedAt)) {
+        screen(["-S", name, "-X", "hardcopy", "-h", `/tmp/${name}.txt`]);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        let footer = null;
+        try {
+          footer = readFileSync(`/tmp/${name}.txt`, "utf8")
+            .split("\n")
+            .map((line) => line.trim())
+            .find((line) => line.includes("5h:")) ?? null;
+        } catch {
+          // A missing hardcopy only costs the human-readable line.
+        }
+        log("quota probe", label, footer?.replace(/[^\x20-\x7e]/g, "") ?? `5h:${snap.session?.remaining}% wk:${snap.weekly?.remaining}%`);
+        return { label, fetchedAt: snap.fetchedAt, session: snap.session, weekly: snap.weekly, footer };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+    throw new Error(`the usage snapshot did not refresh for probe ${label}`);
+  } finally {
+    screen(["-S", name, "-X", "quit"]);
+  }
+}
+
+const QUOTA_CONVERSATIONS = 3;
+
+async function quotaMode() {
+  const systemPrompt = `${pad()}\nYou are Pi. Answer in one line unless asked for more.`;
+  const report = {
+    model: MODEL,
+    paddedSystemPromptChars: systemPrompt.length,
+    conversationsPerArm: QUOTA_CONVERSATIONS,
+    probes: [],
+    transport: [],
+    vanilla: [],
+  };
+
+  const start = await quotaProbe("before");
+  report.probes.push(start);
+
+  // Arm A: the same conversation repeated three times on the transport.
+  for (let conversation = 0; conversation < QUOTA_CONVERSATIONS; conversation += 1) {
+    let messages = [];
+    const sessionId = `quota-a-${conversation}-${Date.now()}`;
+    for (const prompt of TURNS) {
+      messages = [...messages, { role: "user", content: prompt, timestamp: now() }];
+      const turn = await transportTurn(sessionId, messages, undefined, systemPrompt);
+      report.transport.push({
+        conversation,
+        prompt,
+        ...summarise(turn.usage),
+        costUsd: turn.costUsd,
+        wallMs: turn.wallMs,
+      });
+      messages = appendAssistant(messages, turn);
+    }
+    log("transport conversation", conversation + 1, JSON.stringify(total(report.transport.filter((t) => t.conversation === conversation))));
+  }
+
+  const afterTransport = await quotaProbe("afterTransport");
+  report.probes.push(afterTransport);
+
+  // Arm B: the same three conversations as chained `claude -p --resume` calls.
+  for (let conversation = 0; conversation < QUOTA_CONVERSATIONS; conversation += 1) {
+    const sessionId = randomUUID();
+    for (const [index, prompt] of TURNS.entries()) {
+      const turn = await vanillaTurn({
+        prompt,
+        sessionId,
+        resume: index > 0,
+        appendSystemPrompt: systemPrompt,
+      });
+      report.vanilla.push({
+        conversation,
+        prompt,
+        ...summarise(turn.usage),
+        costUsd: turn.costUsd,
+        wallMs: turn.wallMs,
+      });
+    }
+    log("vanilla conversation", conversation + 1, JSON.stringify(total(report.vanilla.filter((t) => t.conversation === conversation))));
+  }
+
+  const afterVanilla = await quotaProbe("afterVanilla");
+  report.probes.push(afterVanilla);
+
+  const drain = (a, b, window) => {
+    const first = a[window]?.remaining;
+    const last = b[window]?.remaining;
+    return Number.isFinite(first) && Number.isFinite(last) ? first - last : null;
+  };
+  report.drain = {
+    transport: {
+      sessionPoints: drain(start, afterTransport, "session"),
+      weeklyPoints: drain(start, afterTransport, "weekly"),
+    },
+    vanilla: {
+      sessionPoints: drain(afterTransport, afterVanilla, "session"),
+      weeklyPoints: drain(afterTransport, afterVanilla, "weekly"),
+    },
+    note: "Points are percentage points of the window, whole numbers only. The 5h window drains across the whole run, so the second arm's share is the difference between the two probes around it.",
+  };
+  report.tokens = { transport: total(report.transport), vanilla: total(report.vanilla) };
+  closeAllSessions();
+  return report;
+}
+
 const mode = process.argv[2] ?? "session";
 
 const report =
@@ -657,5 +828,9 @@ const report =
         ? await restartMode()
         : mode === "compaction"
           ? await compactionMode()
-          : await sessionMode({ padded: mode === "cache" });
+          : mode === "quota-probe"
+            ? { probe: await quotaProbe("manual") }
+            : mode === "quota"
+              ? await quotaMode()
+            : await sessionMode({ padded: mode === "cache" });
 console.log(JSON.stringify(report, null, 2));

@@ -1,6 +1,6 @@
 # Measurements
 
-Five questions were measured against the installed Claude Code on 2026-10-31: how much a turn costs in tokens compared with plain `claude -p`, whether a continued session reuses its prompt cache, what survives a process restart, what Pi compaction does to the next turn, and what happens when a turn is cancelled or the CLI stops producing output.
+Six questions were measured against the installed Claude Code on 2026-10-31: how much a turn costs in tokens compared with plain `claude -p`, whether a continued session reuses its prompt cache, what survives a process restart, what Pi compaction does to the next turn, how much of the plan window each arm drains, and what happens when a turn is cancelled or the CLI stops producing output.
 
 All results come from the same installation:
 
@@ -20,6 +20,7 @@ Raw results are committed beside this document as `docs/measurements/*.json`. Th
 - **Cache use.** A continued session reaches **98.8% cache-read share** once the prompt is large enough to be cacheable. Below roughly 4,000 prompt tokens the transport shows no cache activity at all: no reads and no writes.
 - **Across a restart.** A new process read back **11,887 tokens** of instruction prefix that the previous process had written 309 ms earlier. The conversation itself was rewritten, because a rebuild sends history as one flattened message; `claude -p --resume` read its whole conversation back instead.
 - **Compaction.** Pi compaction cut the prompt from 13,192 to 3,709 tokens, and the first turn after it had **no cache at all** (zero reads, zero writes) and took 3,956 ms against 1,682 ms for an ordinary continued turn.
+- **Plan window.** Three identical conversations drained **5 points** of the 5-hour window on the transport and **5 points** on `claude -p`, although vanilla sent 2.4 times as many prompt tokens. Per token the transport drains about 2.4 times more; per conversation the two are equal.
 - **Cancellation.** Cancelling mid-generation returns `aborted` and keeps the partial text. Closing with a parked tool call reaps the process in about 7 seconds. A frozen CLI trips the frame deadline with a `timeout` error, and no process survives.
 
 ## Method
@@ -30,6 +31,7 @@ npm run measure cache          # the same with a 33,573-character instruction bl
 npm run measure restart        # cache reuse across a process restart
 npm run measure compaction     # what Pi compaction does to the next turn
 npm run measure cancellation   # cancel, close, and stall
+npm run measure quota          # plan-window drain for both arms
 ```
 
 `session`, `cache`, and `restart` run both arms. `compaction` measures the transport only, because forcing Claude Code's own compaction into a comparable state is not scriptable.
@@ -117,7 +119,31 @@ Compaction does what it promises for size: the prompt falls by 72%, so every lat
 
 Turn 6 is also the slowest of the six, because a rebuild starts a new process and pays the handshake. One sample; the ordering of the earlier turns shows wall time moves with network conditions too.
 
-## 5. Cancellation and stalls
+## 5. Plan-window drain
+
+The 5-hour and weekly windows are what actually limit a plan. The numbers here come from the footer extension `@joaomj/pi-claude-usage`, which queries the same endpoint Claude Code's `/status` uses and stores whole percentages. Three conversations per arm, the same prompts, run back to back; a probe before, between, and after.
+
+| Probe | 5-hour remaining | Weekly remaining | Footer |
+|---|---|---|---|
+| Before | 76% | 79% | `claude 5h:76% wk:79%` |
+| After the transport arm | 71% | 79% | `claude 5h:71% wk:79%` |
+| After the vanilla arm | 66% | 78% | `claude 5h:66% wk:78%` |
+
+| Arm | Conversations | Requests | Prompt tokens | Output tokens | 5-hour drain |
+|---|---|---|---|---|---|
+| Transport | 3 | 9 | 112,392 | 893 | 5 points |
+| `claude -p --resume` | 3 | 9 | 267,397 | 942 | 5 points |
+
+Two readings of the same data:
+
+- **Per conversation, the arms are equal**: about 1.7 points each for a three-turn conversation. A user who runs the same work on either arm spends the same share of the window.
+- **Per prompt token, the transport drains about 2.4 times more**: 4.45 points per 100,000 prompt tokens against 1.87. With one-point resolution, the plausible ratio spans roughly 1.6 to 3.6. This is consistent with the 1.6 to 2.9 times per-token figure reported for headless SDK sessions in [anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074), now observed for this transport.
+
+The two arms held request count (9 each) and output volume (893 and 942 tokens) constant while prompt size differed by 2.4 times. The window did not follow prompt size. That points at output tokens or request count as the driver, not at the input the transport saves. It is one sample at one-point resolution, so treat the mechanism as a hypothesis, not a result.
+
+The practical consequence: token efficiency is not quota efficiency. The transport's lower cost estimate comes from sending less input, and the plan window appears not to price input the same way.
+
+## 6. Cancellation and stalls
 
 Three cases, each on the real binary through the transport:
 
@@ -135,8 +161,10 @@ The 3,000 ms deadline is per frame wait, not per turn. A turn that keeps produci
 
 These numbers answer less than they appear to.
 
-- **Plan-window consumption is not measured.** Subscription usage is metered against a client label that Claude Code sends, and nothing on the client reports how much of the 5-hour window a turn consumed. Token counts and cost estimates are the only observable proxies.
-- **The label differs between the arms and is not observable here.** The transport's label is set by the Agent SDK; `claude -p` sets its own. If Anthropic meters the two differently, these token numbers will not predict plan consumption.
+- **Plan-window numbers are whole percentages.** One point is the finest reading the endpoint exposes, so a five-point result carries at least one point of uncertainty and the per-token ratio is a range.
+- **The label still differs between the arms.** The transport's label is set by the Agent SDK and `claude -p` sets its own. The drain measured here is what the endpoint reports, not a decomposition of how it was charged.
+- **The drain test needs an interactive session.** The footer extension only activates in Pi's TUI, so each probe waits for its cached snapshot to pass five minutes and then opens a detached terminal session. That made the run 15 minutes long and adds a `screen` dependency to `npm run measure quota`.
+- **Nothing else may use the account during the run.** The windows are shared, so background activity on the same login would be counted against whichever arm was running.
 - **No vanilla interactive arm.** `claude` in a terminal has its own startup and prompt composition, and was not measured. The comparison arm is the closest scriptable equivalent.
 - **One model, one machine, one run per arm.** Cache thresholds, prompt composition, and startup cost differ by model and platform.
 - **The cost estimate is Claude Code's, not a bill.** It prices tokens against a published list; it does not observe plan deductions.
