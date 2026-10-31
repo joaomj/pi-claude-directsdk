@@ -11,19 +11,32 @@ The DirectSDK column reflects this branch, its Agent SDK transport. The Bridge c
 | System prompt | Claude Code's `claude_code` preset with Pi's current system prompt appended. No settings sources, no `.claude` files, no skills. | Uses the Claude Code prompt preset with selected Pi context, skills, and instructions appended. Some injection routes are unsupported, and resumed sessions can retain earlier instructions. |
 | Conversation state | Pi's transcript is the record. A session is reused only while the digest of everything Pi has shown still matches; any edit, branch, resume, compaction, model change, or tool-set change rebuilds it from a text checkpoint that includes completed tool results. No mirrored session. | Resumes a Claude session that mirrors Pi's history. Divergence, compaction, and some recovery paths require synchronization or rebuilding. |
 | Process lifecycle | One Claude Code process per Pi conversation, including follow-up user turns and every tool round trip. A rebuild replaces it. Closing the Pi session closes the process. | Keeps the SDK query active across tool boundaries. Later user turns start a new query that can resume the saved session. |
-| Prompt caching | A continued session keeps its prefix, so tool loops and follow-up turns reuse the cache. A rebuilt session starts a new prefix. No explicit cache anchor and no diagnostic cache accounting. | Uses Claude Code caching and session resume, and suppresses changing Git instructions to stabilize the prefix. Its README reports cache misses after session rebuilds. |
+| Prompt caching | A continued session keeps its prefix, so tool loops and follow-up turns reuse the cache: 98.8 and 98.9 percent cache-read share on turns two and three of a measured conversation. A rebuilt session still reuses the unchanged instruction prefix (94.9 percent of the cached tokens in the same measurement) and rewrites only the conversation tail. Prompts below the model's cacheable minimum are not cached at all. No explicit cache anchor. | Uses Claude Code caching and session resume, and suppresses changing Git instructions to stabilize the prefix. Its README reports cache misses after session rebuilds. |
 | Connection reuse | Handled by the SDK and Claude Code. The provider has no equivalent custom pooling layer. | Networking is handled by the SDK and Claude Code; the provider has no equivalent custom pooling layer. |
 | Authentication guards | Uses CLI login or a CLI setup token. Rejects conflicting API credentials, base URLs, and alternative backend settings before a session starts rather than switching billing routes. Stops after a reported usage-credit overage unless `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` is set. | Uses Claude Code authentication through the SDK. Its README warns that inherited Anthropic API environment variables can redirect the child. |
 | Startup and models | Cache-only startup and lazy loading of the SDK. Refresh combines the CLI account picker with Anthropic documentation to validate model metadata. | Registers models from Pi's Anthropic catalog, with plan and context-window settings. |
 | Compatibility and maintenance | Pins the SDK and MCP packages exactly and gates on the SDK handshake instead of a CLI version range. Maintains the tool bridge, the session digest and rebuild, and the MCP tool server. | Uses a versioned Agent SDK dependency, with an optional external CLI. Maintains session synchronization, prompt projection, and MCP tool bridging. |
-| Verification | 18 offline tests through the transport's own entry point against a scripted SDK runtime, plus a two-call real round trip (`npm run smoke`) and manual Pi runs. No cache or latency measurements. | Provides offline unit tests and API-backed integration tests. Test availability alone does not prove greater reliability. |
+| Verification | 18 offline tests through the transport's own entry point against a scripted SDK runtime, a two-call real round trip (`npm run smoke`), and manual Pi runs. [Measurements](measurements.md) cover token cost, cache reuse, and cancellation on the real binary for one model on one machine. | Provides offline unit tests and API-backed integration tests. Test availability alone does not prove greater reliability. |
 | Additional features | Focused inference provider. | Optional `AskClaude` delegation, including read-only and full native-tool modes. |
 
 Because both sides now use the same SDK interface, the meaningful differences are where the conversation record lives, how a rebuild is decided, and which injection routes are open. DirectSDK closes more of them: no settings, no skills, no native tools, and no resumed session that could carry instructions Pi no longer shows.
 
 ### Measurements
 
-DirectSDK has no published measurement for the Agent SDK transport, and this comparison makes no latency or cache claim for either side. Earlier releases measured the direct-CLI transport that this branch replaces: 99.59 and 99.71 percent cache-read share on two warm turns, 99.84 percent after restarting Pi, and a 2,345.663 ms median provider completion with a 436.408 ms child-spawn-to-replay interval. The caching results came from replaying a reconstructed history, and the latency baseline predates later changes. None of those numbers describes the current transport, and no matched Bridge benchmark exists.
+DirectSDK now has measurements for its Agent SDK transport on the real binary; see [Measurements](measurements.md) for the method and limits. Bridge has no matched measurement, so the right-hand column below is absent.
+
+Against `claude -p --resume` for the same three-turn conversation:
+
+| Arm, same instructions | Prompt tokens | Cost estimate | Wall time |
+|---|---|---|---|
+| DirectSDK | 37,526 | $0.0293 | 4,455 ms |
+| `claude -p --resume` | 88,700 | $0.0684 | 9,855 ms |
+
+The gap comes from Claude Code running with no native tools and no settings sources: the transport sends a 12.4k prompt where vanilla sends 28.9k, because vanilla advertises 28 tools. Cache behaviour is all or nothing by prompt size: no cache activity at 3.5k prompt tokens, 98.8 to 98.9 percent cache-read share at 12.4k. Wall time favours the transport mostly because one process serves every turn, and vanilla starts a new one per turn.
+
+Subscription-window consumption remains unmeasured. Token counts and Claude Code's cost estimate are not a record of plan deductions, and the client label the two arms send differs.
+
+Earlier releases measured the direct-CLI transport that this branch replaces: 99.59 and 99.71 percent cache-read share on two warm turns, 99.84 percent after restarting Pi, and a 2,345.663 ms median provider completion with a 436.408 ms child-spawn-to-replay interval. Those numbers described history replay and no longer apply.
 
 ### Subscription and policy limits
 
@@ -31,6 +44,6 @@ Using the official CLI or SDK does not, by itself, establish Anthropic approval 
 
 ### Which to choose
 
-Choose DirectSDK when you want Pi's transcript to be the only record, with no Claude session that outlives it, and with Claude Code stripped of its own tools, settings, and skills. The trade-off is that an edited history always costs a rebuilt session and a cold prompt prefix.
+Choose DirectSDK when you want Pi's transcript to be the only record, with no Claude session that outlives it, and with Claude Code stripped of its own tools, settings, and skills. The trade-offs are a rebuilt session and a new process whenever the history changes, and a close that takes about seven seconds when a tool call is parked. A rebuild is not a fully cold prefix: the unchanged instructions still hit the cache.
 
 Choose Bridge when you prefer a mirrored, resumable Claude session across Pi restarts, or optional Claude-agent delegation. The trade-off is mirrored-session recovery and a Claude Code instruction environment rather than direct forwarding of Pi's full system prompt. See its [compatibility notes and known issues](https://github.com/elidickinson/pi-claude-bridge/blob/b2e7255ece0b8bfd3a6429fd5c147fd59984c785/README.md#compatibility-with-other-extensions) before relying on prompt injection or session rebuild behavior.

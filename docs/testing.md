@@ -18,7 +18,7 @@ The suite uses `node:test` and needs no credentials. A scripted runtime stands i
 - An offered tool denied by Claude Code, a Pi tool server that failed to connect, a tool Pi never offered, an overage charge refused and allowed, a reply that merely mentions billing, and a silent CLI.
 - A signature-only thinking block dropped from the published message.
 
-The suite proves Pi-facing behaviour. It does not prove real generation, real CLI acceptance, or real cache reuse.
+The suite proves Pi-facing behaviour. It does not prove real generation, real CLI acceptance, or real cache reuse; [Measurements](measurements.md) covers those on the real binary.
 
 ```sh
 npm run check   # types, including the tests
@@ -70,8 +70,10 @@ Results for the Agent SDK transport, all on the installation above:
 - Full Pi run with one tool: answered `0.3.1` from `package.json` in 8 s.
 - Full Pi run with two tools in one turn: answered `0.3.1 2026` in 6 s.
 - `npm test`: 18 of 18 pass.
+- `npm run measure cancellation`: a cancelled turn returns `aborted`; closing with a parked tool call reaps the CLI in 6.9 s; a `SIGSTOP`ped CLI trips the frame deadline with a `timeout` error; no `claude` process survives.
+- `npm run measure session` and `npm run measure cache`: 98.8 to 98.9 percent cache-read share on continued turns, no cache activity below roughly 4,000 prompt tokens, and 94.9 percent reuse of the instruction prefix after a rebuild.
 
-Not verified: cache-read share over long conversations, cross-restart cache behaviour, cancelled turns on the real binary, Windows and compiled-Pi launches. Earlier releases measured those for the direct-CLI transport that this version replaces. Those results do not carry over, because the request path and the process lifecycle changed.
+Not verified: cache behaviour across a Pi restart, long conversations beyond three turns, compaction, Windows and compiled-Pi launches. Earlier releases measured the direct-CLI transport that this version replaces; those results do not carry over, because the request path and the process lifecycle changed.
 
 ## Options and safety
 
@@ -82,6 +84,6 @@ Not verified: cache-read share over long conversations, cross-restart cache beha
 
 ## Known gaps
 
-- The offline suite does not force a real subprocess stall, a real cancellation, or a real Ctrl+C during a tool call.
+- The offline suite does not force a real subprocess stall, a real cancellation, or a real Ctrl+C during a tool call. `npm run measure cancellation` covers the first two on the real binary.
 - No automated check covers Pi's own `/reload` against a live session.
 - The two-tool Pi run is a manual check, not a permanent scenario.

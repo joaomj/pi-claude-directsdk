@@ -79,17 +79,17 @@ Three extensions expose the Claude subscription through Claude Code while Pi own
 | Extra charges | Stops after an overage charge unless opted in | No overage stop; 1M context Extra Usage is opt-in | Stops after an overage charge unless opted in |
 | Tools | Pi executes; no delegation | Pi executes; optional AskClaude delegation, deprecated | Pi executes; no delegation |
 | Conversation | One live Agent SDK session; rebuilt from Pi's history when that history changes | Live Agent SDK query with a mirrored Claude session | Fresh CLI; warm reuse for text-only turns |
-| Latency and cache | Session and prompt cache survive tool calls; rebuilt sessions start a new cache prefix | Query continues across tool calls; rebuilds miss the cache | Warm text turns skip startup; tool loops replay |
+| Latency and cache | Session and prompt cache survive tool calls; a rebuilt session still reuses the instruction prefix | Query continues across tool calls; rebuilds miss the cache | Warm text turns skip startup; tool loops replay |
 | Models | CLI picker plus Anthropic docs, with verified prices | pi-ai Anthropic catalog, updated automatically | CLI discovery plus fallback metadata |
 
-pi-claude-bridge requires Pi `>=0.86.1`. DirectSDK accepts the installed Claude Code version and fails with the CLI's own message when the SDK handshake cannot complete. All three use a Claude Code login, draw on the same subscription, and can be affected by Anthropic billing changes. None has a matched performance benchmark, and this project has not measured cache-read share for the Agent SDK transport. See the [full comparison](docs/comparison.md) for source-level detail.
+pi-claude-bridge requires Pi `>=0.86.1`. DirectSDK accepts the installed Claude Code version and fails with the CLI's own message when the SDK handshake cannot complete. All three use a Claude Code login, draw on the same subscription, and can be affected by Anthropic billing changes. None has a matched performance benchmark. DirectSDK's own numbers are in [Measurements](docs/measurements.md): 37,526 prompt tokens and a $0.0293 cost estimate against `claude -p --resume`'s 88,700 and $0.0684 for the same three turns, with 98.8 to 98.9 percent cache-read share on continued turns. See the [full comparison](docs/comparison.md) for source-level detail.
 
 ## Documentation
 
 - [Usage and configuration](docs/usage.md): local checkout, environment settings, costs, and diagnostics.
 - [Architecture](docs/architecture.md): session lifecycle, prompt composition, tool bridge, and rebuild rules.
 - [Troubleshooting](docs/troubleshooting.md): missing CLI, login, and conflicting environment settings.
-- [Testing](docs/testing.md), [startup](docs/startup.md), and the [full Bridge comparison](docs/comparison.md).
+- [Testing](docs/testing.md), [measurements](docs/measurements.md), [startup](docs/startup.md), and the [full Bridge comparison](docs/comparison.md).
 - [Architecture decision](docs/adr/001-official-agent-sdk.md): why this transport uses the official Agent SDK.
 
 ## Issues and security

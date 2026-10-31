@@ -49,6 +49,8 @@ Turns that received rate-limit information also carry a `pi-claude-directsdk/rat
 
 Token counters come from Claude Code and are per turn. A tool round trip does not double count them, because each Pi model call reads one assistant step.
 
+Caching depends on prompt size. Measured: no cache reads or writes at about 3,500 prompt tokens, and 98.8 to 98.9 percent cache-read share on continued turns at about 12,400. A rebuilt session still reuses the unchanged instruction prefix. See [Measurements](measurements.md).
+
 See [docs/troubleshooting.md](troubleshooting.md) for login and environment errors.
 
 ## Plan usage metering
@@ -76,8 +78,9 @@ Claude Code sees the tools Pi offers for the current turn. When Pi adds or remov
 ## Verification
 
 ```sh
-npm test        # offline, no model calls
-npm run smoke   # two real calls on your own login
+npm test                       # offline, no model calls
+npm run smoke                  # two real calls on your own login
+npm run measure session        # token and cache measurements, several real calls
 ```
 
 See [docs/testing.md](testing.md) for what each command proves and what remains unverified.

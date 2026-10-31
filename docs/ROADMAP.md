@@ -21,7 +21,7 @@ Build repeatable checks for the behavior that distinguishes DirectSDK:
 
 Prefer a small set of public-boundary checks using real subprocesses and local endpoints over tests coupled to internal implementation. Review and approve each proposed test before adding it.
 
-Current coverage: `npm test` checks the Agent SDK transport through its own entry point against a scripted runtime: the tool round trip across model calls, parallel calls, session rebuild, cancellation, the usage-credit guard, and the isolation options. `npm run smoke` checks the tool round trip on the real binary. Long-session cache behavior, cross-restart behavior, and compiled-Pi launches remain manual checks. See [testing.md](testing.md).
+Current coverage: `npm test` checks the Agent SDK transport through its own entry point against a scripted runtime: the tool round trip across model calls, parallel calls, session rebuild, cancellation, the usage-credit guard, and the isolation options. `npm run smoke` checks the tool round trip on the real binary. Long-session cache behavior, cross-restart behavior, and compiled-Pi launches were manual checks at the time. Cache, token cost, and cancellation now have measured results in [measurements.md](measurements.md); cross-restart behavior and compiled Pi remain unverified. See [testing.md](testing.md).
 
 Keep routine regression checks offline and free of subscription usage. Use a small, explicitly approved paid verification path for behavior that requires real Claude generation or upstream cache reuse. Local request inspection cannot establish a real cache hit.
 
@@ -31,7 +31,7 @@ Completion criteria: the agreed checks run repeatably, detect violations of thes
 
 The cache repair, connection pooling, and stable native working directory address different sources of overhead and cache invalidation. They do not remove the fresh Claude process or serialized history replay on every Pi model call.
 
-The measurements that supported this stage described the direct-CLI transport and were removed with it. Warm-cache reuse for the Agent SDK transport of a continued session is expected but not measured. The 436.408 ms median child-spawn-to-replay interval and the 99.6 to 99.8 percent cache-read shares belong to that removed transport and do not apply here.
+The measurements that supported this stage described the direct-CLI transport and were removed with it. Warm-cache reuse for the Agent SDK transport of a continued session was expected but not measured here; [measurements.md](measurements.md) records it. The 436.408 ms median child-spawn-to-replay interval and the 99.6 to 99.8 percent cache-read shares belong to that removed transport and do not apply here.
 
 Measure the current implementation before changing its lifecycle:
 

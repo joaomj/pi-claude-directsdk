@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted migration direction. Not implemented or release-qualified.
+Accepted and implemented on `feat/official-agent-sdk`: transport, offline suite, real round trip, and [measurements](../measurements.md). Not release-qualified.
 
 ## Context
 
@@ -14,7 +14,7 @@ Those constraints require maintenance beyond the desired product outcome. They a
 
 OpenCode v2.2.3 demonstrates a different boundary. It uses the official SDK with the user's Claude executable, appends host instructions to Claude Code's base prompt, disables native tools, and sends host tool results through SDK MCP handlers.
 
-See the [PRD](../PRD.md) for user-facing requirements and source references.
+User-facing requirements and source references came from the PRD that scoped this migration; it is a working document and is not part of this repository.
 
 ## Decision
 
@@ -61,24 +61,27 @@ Would hand native tools or workflow control to Claude Code. Rejected because the
 
 ## Consequences
 
-### Benefits expected, not yet measured
+### Benefits
 
 - Delegate supported process and protocol plumbing to the official SDK.
 - Follow a shipped integration pattern for host-owned tools and appended instructions.
-- Remove maintenance devoted solely to exact replay and upstream request rewriting.
+- Remove maintenance devoted solely to exact replay and upstream request rewriting. Roughly 3,000 deleted source lines of relay, replay, and transcript code went with them.
+- Cost less per conversation: 37,526 prompt tokens and a $0.0293 estimate for three turns, against 88,700 and $0.0684 for `claude -p --resume`. Vanilla sends 28 native tool schemas that this transport never sends.
 
 ### Accepted trade-offs
 
 - Claude receives Claude Code instructions as well as Pi instructions. Pi's prompt is no longer the sole instruction layer.
 - A Claude session can diverge from Pi's visible history. The provider must adapt or rebuild it explicitly.
 - Claude Code may make multiple upstream attempts within a turn.
-- Cache reuse, latency, and subscription usage may differ from the old transport.
+- Cache reuse depends on prompt size. Measured: no cache activity below roughly 4,000 prompt tokens, 98.8 to 98.9 percent cache-read share above it on continued turns, and 94.9 percent reuse of the instruction prefix after a rebuild.
+- Latency per turn is lower than `claude -p --resume` mostly because one process serves every turn (1.1 to 2.1 s against 2.6 to 3.5 s). A close with a parked tool call takes about seven seconds.
+- Subscription usage remains unmeasured. Token counts and Claude Code's cost estimate do not record plan deductions, and the client label differs from vanilla's.
 - SDK packaging adds dependency and runtime compatibility work.
 - Upstream billing and policy risks remain. This decision is not a claim of Anthropic endorsement.
 
 ## Qualification and follow-up
 
-The [PRD acceptance criteria](../PRD.md#release-acceptance) govern the migration. Implementation planning must resolve session recovery, supported versions, installation behavior, configuration migration, and available usage-credit signals.
+The migration's acceptance criteria still govern release. Session recovery, supported versions, installation behavior, configuration migration, and the usage-credit signals are settled by tests and by [Measurements](../measurements.md). Unverified: cache behaviour across a Pi restart, conversations longer than three turns, compaction, Windows, and compiled Pi.
 
 The existing README and architecture describe the shipped implementation until migration lands. The old roadmap's requirement to preserve exact replay, exclusive Pi prompt ownership, and one-request admission no longer gates this migration.
 

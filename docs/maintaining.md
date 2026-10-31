@@ -44,12 +44,17 @@ message types, or the MCP server API, then run:
 npm run check
 npm test
 npm run smoke      # two real model calls on the maintainer login
+npm run measure cancellation   # token, cache, and process accounting
 ```
 
 `npm run smoke` is the check that catches a breaking frame change: it fails when
-the tool call does not come back to Pi or the session does not continue. Also
-repeat the two-tool Pi run in [testing.md](testing.md#full-pi-run) after a
-Claude Code update, because the CLI, not the SDK alone, produces the frames.
+the tool call does not come back to Pi or the session does not continue.
+`npm run measure cancellation` is the check that catches a lifecycle change: it
+fails when a cancelled turn is not `aborted`, when a parked session does not
+close, or when a `claude` process survives. Also repeat the two-tool Pi run in
+[testing.md](testing.md#full-pi-run) after a Claude Code update, because the CLI,
+not the SDK alone, produces the frames. Record what changed in
+[measurements.md](measurements.md) when a number moves.
 
 The former `upstream-watch.yml` workflow and its CLI range check were removed
 with the direct-CLI transport. Watching upstream issues for identifier changes

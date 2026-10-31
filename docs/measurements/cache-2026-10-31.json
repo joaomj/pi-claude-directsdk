@@ -1,0 +1,260 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "cli": "2.1.281 (Claude Code)",
+  "paddedSystemPromptChars": 33573,
+  "turns": [],
+  "transport": [
+    {
+      "prompt": "Red, blue, and yellow.",
+      "stopReason": "stop",
+      "usage": {
+        "input": 10,
+        "output": 113,
+        "cacheRead": 0,
+        "cacheWrite": 12360
+      },
+      "costUsd": 0.025294999999999998,
+      "wallMs": 2136,
+      "input": 10,
+      "output": 113,
+      "cacheRead": 0,
+      "cacheWrite": 12360,
+      "promptTokens": 12370,
+      "totalTokens": 12483,
+      "cacheReadShare": 0
+    },
+    {
+      "prompt": "Orange, green, and purple.",
+      "stopReason": "stop",
+      "usage": {
+        "input": 10,
+        "output": 102,
+        "cacheRead": 12360,
+        "cacheWrite": 142
+      },
+      "costUsd": 0.027334999999999998,
+      "wallMs": 1219,
+      "input": 10,
+      "output": 102,
+      "cacheRead": 12360,
+      "cacheWrite": 142,
+      "promptTokens": 12512,
+      "totalTokens": 12614,
+      "cacheReadShare": 0.9879
+    },
+    {
+      "prompt": "Red, blue, yellow, orange, green, purple.",
+      "stopReason": "stop",
+      "usage": {
+        "input": 10,
+        "output": 86,
+        "cacheRead": 12502,
+        "cacheWrite": 132
+      },
+      "costUsd": 0.029289199999999998,
+      "wallMs": 1100,
+      "input": 10,
+      "output": 86,
+      "cacheRead": 12502,
+      "cacheWrite": 132,
+      "promptTokens": 12644,
+      "totalTokens": 12730,
+      "cacheReadShare": 0.9888
+    }
+  ],
+  "vanilla": [
+    {
+      "prompt": "Red, blue, and yellow.",
+      "stopReason": "end_turn",
+      "usage": {
+        "input": 10,
+        "output": 102,
+        "cacheRead": 0,
+        "cacheWrite": 28895
+      },
+      "costUsd": 0.059266,
+      "numTurns": 1,
+      "wallMs": 3122,
+      "init": {
+        "version": "2.1.281",
+        "tools": 28,
+        "mcpServers": 1,
+        "sessionId": "2e7e8d38-e81f-4da6-afa9-ecadcd5e55d7"
+      },
+      "rateLimit": [
+        {
+          "status": "allowed",
+          "resetsAt": 1793495400,
+          "rateLimitType": "five_hour",
+          "overageStatus": "rejected",
+          "overageDisabledReason": "org_level_disabled",
+          "isUsingOverage": false,
+          "unifiedWindows": {
+            "five_hour": {
+              "utilization": 0.08,
+              "resetsAt": 1793495400
+            },
+            "seven_day": {
+              "utilization": 0.18,
+              "resetsAt": 1793782800
+            }
+          }
+        }
+      ],
+      "stderr": null,
+      "input": 10,
+      "output": 102,
+      "cacheRead": 0,
+      "cacheWrite": 28895,
+      "promptTokens": 28905,
+      "totalTokens": 29007,
+      "cacheReadShare": 0
+    },
+    {
+      "prompt": "Orange, green, and purple.",
+      "stopReason": "end_turn",
+      "usage": {
+        "input": 10,
+        "output": 118,
+        "cacheRead": 28895,
+        "cacheWrite": 904
+      },
+      "costUsd": 0.0645635,
+      "numTurns": 1,
+      "wallMs": 3491,
+      "init": {
+        "version": "2.1.281",
+        "tools": 36,
+        "mcpServers": 1,
+        "sessionId": "2e7e8d38-e81f-4da6-afa9-ecadcd5e55d7"
+      },
+      "rateLimit": [
+        {
+          "status": "allowed",
+          "resetsAt": 1793495400,
+          "rateLimitType": "five_hour",
+          "overageStatus": "rejected",
+          "overageDisabledReason": "org_level_disabled",
+          "isUsingOverage": false,
+          "unifiedWindows": {
+            "five_hour": {
+              "utilization": 0.09,
+              "resetsAt": 1793495400
+            },
+            "seven_day": {
+              "utilization": 0.18,
+              "resetsAt": 1793782800
+            }
+          }
+        }
+      ],
+      "stderr": null,
+      "input": 10,
+      "output": 118,
+      "cacheRead": 28895,
+      "cacheWrite": 904,
+      "promptTokens": 29809,
+      "totalTokens": 29927,
+      "cacheReadShare": 0.9693
+    },
+    {
+      "prompt": "Red, blue, yellow, orange, green, purple.",
+      "stopReason": "end_turn",
+      "usage": {
+        "input": 10,
+        "output": 96,
+        "cacheRead": 29799,
+        "cacheWrite": 177
+      },
+      "costUsd": 0.0683874,
+      "numTurns": 1,
+      "wallMs": 3242,
+      "init": {
+        "version": "2.1.281",
+        "tools": 36,
+        "mcpServers": 1,
+        "sessionId": "2e7e8d38-e81f-4da6-afa9-ecadcd5e55d7"
+      },
+      "rateLimit": [
+        {
+          "status": "allowed",
+          "resetsAt": 1793495400,
+          "rateLimitType": "five_hour",
+          "overageStatus": "rejected",
+          "overageDisabledReason": "org_level_disabled",
+          "isUsingOverage": false,
+          "unifiedWindows": {
+            "five_hour": {
+              "utilization": 0.09,
+              "resetsAt": 1793495400
+            },
+            "seven_day": {
+              "utilization": 0.18,
+              "resetsAt": 1793782800
+            }
+          }
+        }
+      ],
+      "stderr": null,
+      "input": 10,
+      "output": 96,
+      "cacheRead": 29799,
+      "cacheWrite": 177,
+      "promptTokens": 29986,
+      "totalTokens": 30082,
+      "cacheReadShare": 0.9938
+    }
+  ],
+  "rebuild": {
+    "prompt": "Purple, green, orange, yellow, blue, red.",
+    "stopReason": "stop",
+    "usage": {
+      "input": 10,
+      "output": 101,
+      "cacheRead": 11857,
+      "cacheWrite": 633
+    },
+    "costUsd": 0.0029667,
+    "wallMs": 1774,
+    "input": 10,
+    "output": 101,
+    "cacheRead": 11857,
+    "cacheWrite": 633,
+    "promptTokens": 12500,
+    "totalTokens": 12601,
+    "cacheReadShare": 0.9486
+  },
+  "vanillaInit": {
+    "version": "2.1.281",
+    "tools": 28,
+    "mcpServers": 1,
+    "sessionId": "2e7e8d38-e81f-4da6-afa9-ecadcd5e55d7"
+  },
+  "totals": {
+    "transport": {
+      "input": 30,
+      "output": 301,
+      "cacheRead": 24862,
+      "cacheWrite": 12634,
+      "promptTokens": 37526,
+      "totalTokens": 37827,
+      "costUsd": 0.029289199999999998,
+      "wallMs": 4455,
+      "cacheReadShare": 0.6625,
+      "promptChars": 89
+    },
+    "vanilla": {
+      "input": 30,
+      "output": 316,
+      "cacheRead": 58694,
+      "cacheWrite": 29976,
+      "promptTokens": 88700,
+      "totalTokens": 89016,
+      "costUsd": 0.0683874,
+      "wallMs": 9855,
+      "cacheReadShare": 0.6617,
+      "promptChars": 89
+    },
+    "note": "costUsd is cumulative per conversation in both arms; totals report the last turn, not the sum."
+  }
+}
