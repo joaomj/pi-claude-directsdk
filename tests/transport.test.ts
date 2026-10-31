@@ -20,7 +20,7 @@ import type {
 import { ALLOW_USAGE_CREDITS_ENV } from "../src/billing.ts";
 import { TEST_UPSTREAM_ENV } from "../src/env.ts";
 import { SessionRegistry, streamClaudeDirectSdk, type CallDeps } from "../src/sdk/stream.ts";
-import { FakeClaude, model, overageFrame, textStep, toolStep, USAGE } from "./fake-sdk.ts";
+import { FakeClaude, model, overageFrame, reasoningStep, textStep, toolStep, USAGE } from "./fake-sdk.ts";
 
 const PROMPT = "You are Pi. Answer with the host tools.";
 const SYSTEM_PROMPT = "Pi system prompt";
@@ -158,6 +158,26 @@ test("streams one answer with usage, and isolates Claude Code from its own tools
   assert.equal(systemPrompt.type, "preset");
   assert.equal(systemPrompt.append, SYSTEM_PROMPT);
   assert.match(query.users[0] ?? "", /hello/);
+});
+
+test("drops the signature-only reasoning block Claude Code sends for encrypted thinking", async () => {
+  const { fake, deps } = harness();
+  const collecting = collect(call(deps, [userText("think, then answer")]));
+  const query = await fake.nextQuery();
+  await query.waitForUsers(1);
+  query.emit(...reasoningStep("done"));
+
+  const events = await collecting;
+  const done = final(events);
+  assert.equal(done.stopReason, "stop");
+  assert.deepEqual(
+    done.content.map((block) =>
+      block.type === "thinking" ? `thinking:${block.thinking}` : block.type === "text" ? `text:${block.text}` : block.type,
+    ),
+    ["thinking:readable reasoning", "text:done"],
+  );
+  // The deltas still streamed; only the published message is filtered.
+  assert.ok(events.some((event) => event.type === "thinking_delta"));
 });
 
 test("returns a tool call to Pi, then continues the same session with Pi's result", async () => {

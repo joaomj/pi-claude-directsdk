@@ -213,6 +213,95 @@ export function toolStep(
   return frames as unknown as SDKMessage[];
 }
 
+/**
+ * A step with two thinking blocks and one text block: the first thinking block
+ * carries readable reasoning, the second only a signature, which is what Claude
+ * Code sends for encrypted reasoning.
+ */
+export function reasoningStep(text: string, options: InitOptions = {}): SDKMessage[] {
+  return [
+    initFrame(options),
+    {
+      type: "stream_event",
+      event: {
+        type: "message_start",
+        message: {
+          id: "msg_fake",
+          model: "claude-haiku-4-5-20251001",
+          role: "assistant",
+          content: [],
+          usage: { ...USAGE, output_tokens: 0 },
+        },
+      },
+    },
+    {
+      type: "stream_event",
+      event: { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
+    },
+    {
+      type: "stream_event",
+      event: { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "readable reasoning" } },
+    },
+    { type: "stream_event", event: { type: "content_block_stop", index: 0 } },
+    {
+      type: "stream_event",
+      event: { type: "content_block_start", index: 1, content_block: { type: "thinking", thinking: "" } },
+    },
+    {
+      type: "stream_event",
+      event: { type: "content_block_delta", index: 1, delta: { type: "thinking_delta", thinking: "" } },
+    },
+    {
+      type: "stream_event",
+      event: { type: "content_block_delta", index: 1, delta: { type: "signature_delta", signature: "sig-only" } },
+    },
+    { type: "stream_event", event: { type: "content_block_stop", index: 1 } },
+    {
+      type: "stream_event",
+      event: { type: "content_block_start", index: 2, content_block: { type: "text", text: "" } },
+    },
+    {
+      type: "stream_event",
+      event: { type: "content_block_delta", index: 2, delta: { type: "text_delta", text } },
+    },
+    { type: "stream_event", event: { type: "content_block_stop", index: 2 } },
+    {
+      type: "assistant",
+      message: {
+        id: "msg_fake",
+        model: "claude-haiku-4-5-20251001",
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "readable reasoning", signature: "sig-1" },
+          { type: "thinking", thinking: "", signature: "sig-only" },
+          { type: "text", text },
+        ],
+        stop_reason: null,
+        usage: USAGE,
+      },
+    },
+    {
+      type: "stream_event",
+      event: {
+        type: "message_delta",
+        delta: { stop_reason: "end_turn" },
+        usage: { output_tokens: USAGE.output_tokens },
+      },
+    },
+    { type: "stream_event", event: { type: "message_stop" } },
+    {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      num_turns: 1,
+      stop_reason: "end_turn",
+      usage: USAGE,
+      total_cost_usd: 0.01,
+      session_id: "sess_fake",
+    },
+  ] as unknown as SDKMessage[];
+}
+
 export function overageFrame(): SDKMessage {
   return {
     type: "rate_limit_event",

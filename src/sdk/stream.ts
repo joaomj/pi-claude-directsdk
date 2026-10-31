@@ -829,6 +829,12 @@ async function executeCall(
     renderer.adoptCompleted();
     renderer.closeBlocks();
 
+    // Claude Code streams reasoning as an encrypted signature without readable
+    // text. A block with neither is not a reasoning step Pi can show.
+    output.content = output.content.filter(
+      (block) => block.type !== "thinking" || block.thinking.trim() !== "" || block.redacted === true,
+    );
+
     const toolCalls: ToolCall[] = [];
     for (const [index, call] of calls.entries()) {
       const bare = toolBareName(call.name);
