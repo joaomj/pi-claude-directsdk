@@ -4,24 +4,23 @@
 [![npm version](https://img.shields.io/npm/v/pi-claude-directsdk.svg)](https://www.npmjs.com/package/pi-claude-directsdk)
 [![License](https://img.shields.io/github/license/joaomj/pi-claude-directsdk)](LICENSE)
 
-Use Claude inside Pi through the unmodified Claude Code executable. Pi owns the transcript, tools, approvals, and retries; the CLI supplies subscription authentication as a model transport.
+Use Claude inside Pi through the official Claude Agent SDK and the unmodified Claude Code executable. Pi owns the transcript, tools, approvals, and retries; Claude Code supplies subscription authentication and the model.
 
-Each request starts a fresh `claude -p` process that replays Pi's history with an explicit cache anchor, and every tool call returns to Pi for execution. Three measurements recorded 99.6% to 99.8% cache-read share on warm turns; see [transport measurements](docs/transport-measurements.md) for the workloads and their limits.
+One Claude Code session serves each Pi conversation. Assistant output streams through as it arrives, tool calls return to Pi for authorization and execution, and the same session continues with those results. Claude Code runs with no native tools, no settings, no skills, and no MCP servers except the one Pi supplies.
 
 ## Requirements
 
 - Pi. The current maintainer installation is Pi 1.3.0; see [verification details](docs/testing.md#verified-environments).
 - Node 20 or later for Node-based Pi installations and local development. Compiled Pi uses its bundled runtime.
-- Claude Code in the qualified range `>=2.1.263 <2.2.0` (see `QUALIFIED_CLI_RANGE` in `src/models.ts`).
+- Claude Code installed and reachable. The SDK handshake tests the installed version at each session start, so this project does not pin a version range. Claude Code 2.1.281 is the version under test.
 - A Claude paid plan. The free plan excludes the CLI.
 - A Claude Code login via `claude auth login`.
 
 ## Install
 
-Install the qualified Claude Code version, then sign in through the official CLI:
+Sign in through the official CLI:
 
 ```sh
-npm install -g --ignore-scripts=false @anthropic-ai/claude-code@2.1.281
 claude auth login
 ```
 
@@ -34,9 +33,33 @@ pi install git:github.com/joaomj/pi-claude-directsdk  # alternative source
 
 Start or restart interactive Pi, open `/model`, and wait for the DirectSDK catalog refresh. On a fresh install, this step must complete before selecting the model from the command line; later invocations can use the saved catalog, for example `pi --model claude-directsdk/haiku`.
 
-DirectSDK uses the CLI login, not the Pi Anthropic login. The `npm install` flag enables the Claude Code installer for that command only.
+DirectSDK uses the CLI login, not the Pi Anthropic login.
 
 The model catalog does not guarantee account entitlement. Start with `haiku` for a small request. Models that require usage credits can incur separate charges, and DirectSDK cannot undo a charge that Claude Code already reported. See [usage credits](docs/usage.md#usage-credit-guard).
+
+## Test a local checkout
+
+A local run needs no release and no version bump. Run the extension directly from the checkout:
+
+```sh
+pi -e ./extensions/claude-directsdk/index.ts --model claude-directsdk/haiku
+```
+
+Pi loads the extension for that invocation only and leaves your settings unchanged. To keep it installed while developing, add the checkout itself:
+
+```sh
+pi install ./          # registers this directory as an extension source
+pi remove ./           # removes it again
+```
+
+Two checks need no Pi session:
+
+```sh
+npm test               # offline: scripted Claude Agent SDK runtime, no model calls
+npm run smoke          # two real model calls against your own Claude Code login
+```
+
+`npm run smoke` proves the tool round trip on the real binary: the first call must return a tool call, and the second must answer from the tool result Pi supplies. It closes the session it opened. Both commands are described in [testing.md](docs/testing.md).
 
 ## Upgrade
 
@@ -55,18 +78,19 @@ Three extensions expose the Claude subscription through Claude Code while Pi own
 |---|---|---|---|
 | Extra charges | Stops after an overage charge unless opted in | No overage stop; 1M context Extra Usage is opt-in | Stops after an overage charge unless opted in |
 | Tools | Pi executes; no delegation | Pi executes; optional AskClaude delegation, deprecated | Pi executes; no delegation |
-| Conversation | Fresh CLI; full replay; tool changes on supported models | Live Agent SDK query with a mirrored Claude session | Fresh CLI; warm reuse for text-only turns |
-| Latency and cache | 99.6–99.8% cache-read share on warm turns | Query continues across tool calls; rebuilds miss the cache | Warm text turns skip startup; tool loops replay |
+| Conversation | One live Agent SDK session; rebuilt from Pi's history when that history changes | Live Agent SDK query with a mirrored Claude session | Fresh CLI; warm reuse for text-only turns |
+| Latency and cache | Session and prompt cache survive tool calls; rebuilt sessions start a new cache prefix | Query continues across tool calls; rebuilds miss the cache | Warm text turns skip startup; tool loops replay |
 | Models | CLI picker plus Anthropic docs, with verified prices | pi-ai Anthropic catalog, updated automatically | CLI discovery plus fallback metadata |
 
-DirectSDK requires Claude Code `>=2.1.263 <2.2.0`; pi-claude-bridge requires Pi `>=0.86.1`; pi-claude-code accepts the installed Claude Code version. All three use a Claude Code login, draw on the same subscription, and can be affected by Anthropic billing changes. None has a matched performance benchmark. See the [full comparison](docs/comparison.md) for source-level detail.
+pi-claude-bridge requires Pi `>=0.86.1`. DirectSDK accepts the installed Claude Code version and fails with the CLI's own message when the SDK handshake cannot complete. All three use a Claude Code login, draw on the same subscription, and can be affected by Anthropic billing changes. None has a matched performance benchmark, and this project has not measured cache-read share for the Agent SDK transport. See the [full comparison](docs/comparison.md) for source-level detail.
 
 ## Documentation
 
-- [Usage and configuration](docs/usage.md): local checkout, environment settings, costs, diagnostics, and verification.
-- [Architecture](docs/architecture.md): request lifecycle, model routing, tool transport, and admission relay.
-- [Troubleshooting](docs/troubleshooting.md): missing CLI, login, version, and conflicting environment settings.
-- [Testing](docs/testing.md), [startup](docs/startup.md), [transport measurements](docs/transport-measurements.md), and the [full Bridge comparison](docs/comparison.md).
+- [Usage and configuration](docs/usage.md): local checkout, environment settings, costs, and diagnostics.
+- [Architecture](docs/architecture.md): session lifecycle, prompt composition, tool bridge, and rebuild rules.
+- [Troubleshooting](docs/troubleshooting.md): missing CLI, login, and conflicting environment settings.
+- [Testing](docs/testing.md), [startup](docs/startup.md), and the [full Bridge comparison](docs/comparison.md).
+- [Architecture decision](docs/adr/001-official-agent-sdk.md): why this transport uses the official Agent SDK.
 
 ## Issues and security
 

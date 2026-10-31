@@ -1,98 +1,94 @@
 # Architecture
 
-One Pi model call spawns one request-scoped `claude` process and admits at most one upstream Messages request.
+One Claude Code session serves one Pi conversation. Pi keeps the transcript, the tools, and the approvals; the Claude Agent SDK carries the conversation and the model calls.
 
 ```mermaid
 flowchart TD
-    A["Pi calls streamSimple(model, transcript)"] --> B["Provider reads system prompt + tools from transcript messages"]
-    B --> C["Provider writes private files: system.md, settings.json (CLAUDE_CODE_EXTRA_BODY), tools.json"]
-    C --> D["Provider starts admission relay on 127.0.0.1 with per-request token route"]
-    D --> E["Provider spawns one request-scoped claude process (ANTHROPIC_BASE_URL points at relay, child env only)"]
-    E --> F["Provider replays history on child stdin (shouldQuery: false, final frame queries)"]
-    F --> G["CLI sends POST /v1/messages through relay"]
-    G -->|first request| H["Relay forwards to api.anthropic.com, captures SSE"]
-    G -->|later requests| I["Relay denies locally, no upstream contact"]
-    E --> J["Provider converts child stdout stream-json to Pi events"]
-    H --> K["Provider publishes tool calls only after upstream completes and child exits"]
-    K --> L["Pi executes tools (inert MCP advertises them, never executes)"]
-    L --> M["done with exact usage, or error"]
+    A["Pi calls streamSimple(model, transcript)"] --> B["Provider reads prompt and tools from the transcript"]
+    B --> C{"Live session for this conversation?"}
+    C -->|history matches| D["Reuse the running query"]
+    C -->|new, edited, or resuming| E["Build a checkpoint prompt from Pi history"]
+    E --> F["Start one streaming-input query"]
+    D --> G["Send the new user message, or deliver parked tool results"]
+    F --> G
+    G --> H["Claude Code streams assistant output"]
+    H --> I["Provider converts stream events to Pi events"]
+    I --> J{"Stop reason"}
+    J -->|tool use| K["Publish the call to Pi; the MCP handler stays parked"]
+    K --> L["Pi authorizes and executes the tool"]
+    L --> G
+    J -->|end turn| M["done with usage, cost, and diagnostics"]
 ```
 
 ## Components
 
 ### Provider entry (`src/provider.ts`, `extensions/claude-directsdk/index.ts`)
 
-The extension registers a complete Pi provider with id `claude-directsdk` and an initially empty catalog. Cache-only refresh restores verified snapshots from Pi’s model store without CLI probes or network work. Live refresh runs after editor startup and reports failures instead of returning pinned models.
+The extension registers a complete Pi provider with id `claude-directsdk` and an initially empty catalog. Cache-only refresh restores verified snapshots from Pi's model store without CLI probes or network work. Live refresh runs after editor startup and reports failures instead of returning pinned models.
 
-`streamSimple` uses `src/lazy-stream.ts` to return a stream immediately. The wrapper loads `src/stream.ts` asynchronously and preserves the model, transcript, and request options. See [startup.md](startup.md).
+The extension also registers the provider's API handler directly, because Pi can dispatch a selected or overridden model while the live catalog is still empty. On shutdown it closes every Claude session it started and unregisters the handler.
 
-### History replay (`src/replay.ts`)
+`streamSimple` uses `src/lazy-stream.ts` to return a stream immediately. The wrapper loads `src/sdk/stream.ts` on first use, so Pi's startup path never imports the SDK. See [startup.md](startup.md).
 
-Pi owns the transcript. Each call replays prior assistant, user, and tool-result frames in native `stream-json` form through a fresh child.
+### Environment boundary (`src/env.ts`)
 
-Rules:
+This is the only place that reads the launching environment.
 
-- Historical user frames carry `shouldQuery: false` and expect a zero-turn acknowledgment. Only the final frame may generate.
-- The last frame must be a nonempty user or tool-result message. Assistant prefill is unsupported.
-- Empty text or thinking placeholders from failed and aborted responses are omitted. Nonempty history remains intact.
-- Tool-call IDs that Claude cannot accept are mapped to valid native IDs. Tool results use the same mapping. Stored Pi IDs remain unchanged.
-- Thinking without a matching native carrier is replayed as ordinary assistant text. This allows switching providers during a session.
-- Other unsupported history is rejected with a `replay` error, never flattened into prose.
-- Signed native thinking survives only inside a durable carrier (`pi-claude-directsdk/native`) attached to the Pi assistant message. The carrier is restored only when the visible projection (text, thinking, tool calls) still matches. Any edit drops the native blocks. Session files persist the carrier, so resumed turns replay exactly.
-- Models with verified mid-conversation tool-change support keep later system messages. The initial system message supplies the system prompt and initial tools. Later tool additions and removals are injected as native system content at their assistant boundaries, and historical calls to any tool declared earlier in the transcript remain replayable. Response validation still uses the current Pi inventory.
+- `checkEnvConflicts` rejects `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and `CLAUDE_CODE_USE_FOUNDRY`. A conflicting override would silently move the request to another billing route. `PI_DIRECTSDK_TEST_UPSTREAM=1` is the documented bypass for loopback test fixtures.
+- `buildChildEnv` forwards `CLAUDE_DIRECTSDK_CONFIG_DIR` as `CLAUDE_CONFIG_DIR`, sets `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, and `CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off`, and deletes `CLAUDE_CODE_ENTRYPOINT` so the SDK supplies its own session label. Pi owns compaction and budgets.
 
-### Request assembly (`src/request.ts`)
+### Session lifecycle (`src/sdk/session.ts`)
 
-The system prompt and tool schemas travel through per-request private files with owner-only permissions. Later system messages in the transcript travel through the relay rewrite when the model supports mid-conversation tool changes:
+`ClaudeSession` owns one streaming-input `query()`. Pi messages arrive through a bounded input generator; SDK messages arrive through a bounded frame channel with a deadline per frame. The pump records `system/init` (session id, CLI version, MCP server status) before forwarding frames.
 
-- `system.md`: the system prompt.
-- `settings.json`: carries `CLAUDE_CODE_EXTRA_BODY`.
-- `tools.json`: the inert MCP manifest.
-- `inert-mcp.mjs`: the inert MCP server source.
+A frame deadline is a phase limit, not a total runtime limit. Cancellation asks the query to interrupt, waits for a short grace period, then closes. Closing settles every parked tool handler, closes both channels, closes the query, and aborts the SDK's controller, so no Claude Code process outlives the Pi conversation.
 
-Files avoid OS argument and environment-string limits. Authentication and identity headers are never replaced. The relay preserves them.
+### Option isolation (`src/sdk/options.ts`)
 
-When the model supports mid-conversation tool changes, the request body carries the initial tools, a deferred placeholder, and later-added tools with `defer_loading: true`. The relay adds the `mid-conversation-tool-changes-2026-07-01` beta value to the admitted request and injects native system messages before their assistant boundaries. Unsupported models keep the collapsed system message and current tool set.
+Every session starts with:
 
-The child argv (`buildArgv`) runs the CLI with `--input-format stream-json`, `--output-format stream-json`, `--verbose`, `--include-partial-messages`, `--max-turns 1`, `--permission-mode dontAsk`, `--no-session-persistence`, `--strict-mcp-config`, `--disable-slash-commands`, and an empty `--setting-sources`. `--max-turns 1` is accepted by the qualified CLI even though recent `--help` output hides it. The installed-Pi harness verifies the request path with the user’s real CLI.
+- `tools: []`, so Claude Code has no native tool to run.
+- `settingSources: []` and `strictMcpConfig: true`, so no user, project, or local settings and no `CLAUDE.md` discovery reach the child.
+- `skills: []`, `permissionMode: "dontAsk"`, `persistSession: false`.
+- `systemPrompt` preset `claude_code` with Pi's instructions appended.
+- `autoMemoryEnabled: false` and `autoDreamEnabled: false`.
+- `allowedTools` listing exactly the offered host tools. Under `dontAsk`, Claude Code denies an MCP tool that is not listed, so listing them is what lets the call reach Pi's handler, where Pi decides.
 
-The child environment (`buildChildEnv`) points `ANTHROPIC_BASE_URL` at the relay. It sets native isolation flags (`ENABLE_TOOL_SEARCH=false`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, `CLAUDE_CODE_MAX_RETRIES=0`, `DISABLE_AUTO_COMPACT=1`, `DISABLE_COMPACT=1`, `CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off`). Sampling controls from Pi options (`temperature`, `top_p`) are dropped because subscription routes reject them.
+Sampling controls from Pi options (`temperature`, `top_p`) are not sent; subscription routes reject them. A thinking level reaches Claude Code as an effort level only when the model's catalog metadata maps it to one of `low`, `medium`, `high`, `xhigh`, or `max`.
 
-### Admission relay (`src/admission.ts`)
+### Session reuse and rebuild (`src/sdk/stream.ts`, `src/sdk/checkpoint.ts`)
 
-The relay binds an ephemeral loopback port with a random per-request route (`/admit/<token>`). It forwards only the first upstream Messages request and rejects later native recovery or retry attempts locally with `PI_MODEL_ADMISSION_CONSUMED`. The relay changes HTTP transfer encoding. Request identity stays native. The transport may rewrite the request body for mid-conversation system messages and add beta values to `anthropic-beta`; the payload otherwise stays native.
+Sessions are kept in a registry keyed by Pi's session id. A session is reused only when all of these hold:
 
-The relay reconstructs the upstream assistant message from the SSE stream (`SseCapture`) and records status, request id, failure text, and an error body (capped at 64 KiB). Upstream targets must be HTTPS, except loopback HTTP endpoints. Request bodies are capped at 512 MiB.
+- The native model, the effort, the appended prompt, and the offered tool names are unchanged.
+- The messages Pi has already shown are byte-identical to what the session saw, compared through a digest of that prefix. An edit anywhere in the prefix, a branch, a resume, or a compaction changes the digest.
+- What follows that prefix is either the tool results for the calls Claude Code is waiting on, or exactly one new user message.
 
-### Child supervision (`src/process.ts`)
+Anything else drops the session and starts a new one from a checkpoint. The checkpoint is text: earlier turns, the assistant's tool calls, and every completed tool result. A rebuild therefore never re-runs a completed operation and never pretends the new session saw the old one.
 
-Each Pi model call owns one child in its own process group. Abort and failure kill the full tree. This matters on Windows, where the npm `claude` shim is `cmd.exe` -> `node` and a plain `kill()` would orphan the node child that holds the request open. Stdout is consumed as newline-delimited JSON with an idle deadline that resets on every received line. Each stdin write and child-closure wait also has a deadline, using the request's `timeoutMs`. These are phase limits, not one total runtime limit. Timeout kills the process tree and preserves the first failure. Cancellation rejects pending reads and writes; exit observation remains bounded. Expired read waiters are removed by identity, and every completed operation clears its timer.
+A failed or cancelled call drops the session, because its state after the failure is unknown. Pi's history stays the authority of record.
 
-The caller receives the child final exit status after its output streams close. Executable tool calls still wait for that exit and the complete upstream response. Discovery cleanup attempts every resource release even if observing child closure fails.
+### Tool bridge (`src/sdk/tools.ts`, `src/sdk/bridge.ts`)
 
-### Native working directory (`src/child-cwd.ts`)
+Pi tools are exposed as one MCP server named `pi`, so Claude Code sees `mcp__pi__<name>`. The server is a plain MCP `Server` with JSON-Schema definitions; this transport needs no schema-conversion library. Top-level `oneOf`, `allOf`, and `anyOf` are dropped because Claude's validator rejects them, and nullable `type` arrays collapse to the non-null member. Tool names must be 1 to 50 characters of letters, digits, `_`, or `-`. A tool whose constrained sampling requires strict enforcement is rejected rather than silently unenforced.
 
-Native model-request children share an empty, persistent directory. Its path remains stable across Pi processes, avoiding a changing native working-directory prefix after restart. Request files, credentials, and transcripts are not stored there.
+A tool call never executes in the MCP handler. The handler parks in the bridge and waits for Pi.
 
-- Linux: `${XDG_CACHE_HOME:-~/.cache}/pi-claude-directsdk/child`.
-- macOS: `~/Library/Caches/pi-claude-directsdk/child`.
-- Windows: `%LOCALAPPDATA%/pi-claude-directsdk/child`, with the user's local app-data directory as the fallback.
+Correlation uses `_meta.claudecode/toolUseId`, which Claude Code sends with each call. Without that id, the bridge matches the oldest announced call with the same tool name. A call the bridge cannot attribute fails closed with an error result: Pi does not run tools it cannot attribute to a specific call.
 
-On POSIX, the provider verifies that its cache root and child directory belong to the current effective user and have mode `0700`. It rejects symlinks and nonempty child directories instead of reading unexpected project instructions or deleting files. Windows uses the access controls inherited from the user's cache parent. Relative cache-directory settings fail with the setting name and a remedy.
+Results are delivered by tool-use id. A result for a call Claude Code has announced but not yet dispatched is held until the handler arrives. A duplicate dispatch of the same id is refused instead of executed twice.
 
-The first request after this directory change can miss a previously cached native prefix. A stable path removes this source of cache invalidation; legitimate Pi prompt and tool changes still affect reuse. Linux verification resumed the same session in a new Pi process and measured 99.84% cache-read share with stable Pi prompt and tool hashes. See [transport-measurements.md](transport-measurements.md#linux-lifecycle-and-cross-restart-verification).
+### Stream conversion (`src/sdk/stream.ts`)
 
-### Stream conversion (`src/stream.ts`)
+Claude Code's streamed content blocks are authoritative, because the complete `assistant` message can arrive with or after `message_stop`.
 
-The provider converts child stdout `stream-json` to Pi events. Native result errors are preserved even when stderr is empty. Prompt-length errors report the selected route and configured context window. Native tool calls are published only after the first upstream response is complete and the child has exited. Usage and stop reason come from the authoritative native usage. Incomplete native or upstream responses produce `incomplete` or `upstream` errors.
+- Text and thinking blocks stream as Pi `text_*` and `thinking_*` events. A signature-only thinking block, which is what Claude Code sends for encrypted reasoning, is dropped from the published message.
+- The stop reason comes from the `message_delta` stream event. The `assistant` message always reports a null stop reason.
+- Tool calls are published from the streamed blocks, with the complete message as the fallback for input that did not stream.
+- One `result` frame ends each finished turn. A tool-use step ends at `message_stop`; its `result` arrives only after Pi answers the call.
+- Usage comes from the assistant message and the delta, never from a sum of steps, so tool round trips do not double count.
 
-The provider reads `rate_limit_event.rate_limit_info`. If the authoritative response reports usage-credit overage and `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` is not enabled, the turn fails with a non-retryable `billing` error after usage is captured. Completed and failed turns carry a `pi-claude-directsdk/rate-limit` diagnostic. Upstream usage-credit rejection text maps to the same error.
-
-### Inert MCP (`src/inert-mcp.ts`)
-
-The MCP server name in the native child is `pi`. Tool names are `mcp__pi__<name>`. The server advertises Pi tools so the CLI can call them. It never executes them. Pi alone executes tools.
-
-The helper uses `process.execPath`. Under Bun, its MCP configuration sets `BUN_BE_BUN=1` only for that helper, so a compiled Pi executable runs the JavaScript rather than starting another agent. Node launches remain unchanged.
+The provider reads `rate_limit_event.rate_limit_info`. If the response reports usage-credit overage and `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` is not enabled, the turn fails with a non-retryable `billing` error after usage is captured. Completed and failed turns carry a `pi-claude-directsdk/session` diagnostic with the native model, CLI version, Claude session id, MCP server states, result subtype, and an estimated native cost that is not the subscription charge.
 
 ### Catalog discovery (`src/discovery.ts`, `src/web-catalog.ts`)
 
@@ -104,39 +100,40 @@ Public Anthropic Markdown documents supply current model IDs, model pages, price
 
 Missing metadata excludes only the affected model with a warning. Shared-source failures reject refresh and remove the snapshot. Refresh uses a shared deadline and abort signal. Pi owns persistence and generation-checked publication.
 
-### Request-time probes (`src/setup.ts`)
+### Child supervision for discovery (`src/process.ts`)
 
-CLI resolution and version qualification run only when a model call needs them. They are not part of catalog discovery or editor startup.
+Catalog discovery still spawns a child. Each discovery child runs in its own process group, and abort or failure kills the full tree. This matters on Windows, where the npm `claude` shim is `cmd.exe` to `node` and a plain `kill()` would orphan the node child. Stdout is consumed as newline-delimited JSON with an idle deadline that resets on every received line. Model calls do not use this path: the SDK owns their process.
 
 ## Guarantees
 
-- The provider never executes native tools.
+- Pi owns the transcript, the tool inventory, the approvals, and the retries.
+- Claude Code runs without its own tools, settings, skills, hooks, or permission decisions.
 - The provider never manages login or reads credentials.
 - The provider never falls back to another billing route.
+- The provider never executes a tool it cannot attribute to a specific tool-use id.
 - A turn that Claude Code reports as charged to usage credits stops later turns unless the user explicitly allows usage credits.
+- No Claude Code process outlives the Pi session that started it.
 - Missing CLI and logged-out CLI fail with actionable errors. See [troubleshooting.md](troubleshooting.md).
 
 ## Model routing
 
 The catalog has no hand-written model inventory, aliases, limits, or price table. Its sources are:
 
-- Claude Code’s account picker for resolved aliases and account-visible models.
-- [Anthropic’s model overview](https://platform.claude.com/docs/en/about-claude/models/overview) and linked model pages for canonical routes and capabilities.
-- [Anthropic’s pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing) for token prices, request-wide tiers, and cache lifetimes.
-- [Anthropic’s effort documentation](https://platform.claude.com/docs/en/build-with-claude/effort) for web-only model effort levels.
-- [Anthropic’s mid-conversation documentation](https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages) for the models that accept mid-conversation tool additions and removals.
+- Claude Code's account picker for resolved aliases and account-visible models.
+- [Anthropic's model overview](https://platform.claude.com/docs/en/about-claude/models/overview) and linked model pages for canonical routes and capabilities.
+- [Anthropic's pricing documentation](https://platform.claude.com/docs/en/about-claude/pricing) for token prices, request-wide tiers, and cache lifetimes.
+- [Anthropic's effort documentation](https://platform.claude.com/docs/en/build-with-claude/effort) for web-only model effort levels.
 
-No imported model table sets a capability. `supportsNativeToolChanges` reads the flag the catalog writes on the model; a model that Anthropic does not list, or a page whose wording the catalog cannot parse, keeps the collapsed request shape and reports a warning instead of a guess.
+No imported model table sets a capability. Verified context windows control native `[1m]` selection: a model whose verified context window reaches one million tokens is requested with that suffix. Claude Code owns thinking mode. Missing metadata is never replaced with a guessed limit or a zero price.
 
-Verified context windows control native `[1m]` selection. Claude Code owns thinking mode; the request body sends only an effort level that the catalog supports. Missing metadata is never replaced with a guessed limit or a zero price.
-
-`QUALIFIED_CLI_RANGE` in `src/models.ts` still controls transport qualification. Run the installed-Pi harness with fresh and complete-session scenarios before widening it.
+The installed Claude Code version is not gated by a range. Each session start is the qualification test: the SDK handshake must complete, and Pi reports the CLI's own message when it does not. Run `npm test` and `npm run smoke` before widening any assumption about a new CLI release; see [testing.md](testing.md).
 
 ## Tool transport
 
-Pi owns tool execution. The native child advertises Pi tools through the inert MCP server and never executes them. The authority is `src/request.ts` (`buildRequestBody`, `normalizeInputSchema`). The stable rules:
+Pi owns tool execution. The authority is `src/sdk/tools.ts` for the advertised schemas and `src/sdk/bridge.ts` for delivery. The stable rules:
 
 - Only `tool_choice` `auto` and `none` are supported.
-- Constrained decoding is not enforced. Grammar and best-effort (`strict: "prefer"`) annotations fall back to normal JSON-schema tool calling. Required strict (`strict: "require"`) stays rejected. Malformed native tool input still fails downstream.
-- Native tool calls reach Pi only after the first upstream response is complete and the child has exited.
-- On models with verified mid-conversation tool-change support, historical calls to tools declared earlier in the transcript are replayable, including tools removed from the current inventory. Pi never executes a tool outside the current inventory.
+- Constrained decoding is not enforced. Grammar and best-effort (`strict: "prefer"`) annotations fall back to normal JSON-schema tool calling. Required strict (`strict: "require"`) stays rejected.
+- A tool call for a tool Pi did not offer in that turn fails the turn. Claude Code cannot substitute a native tool.
+- A `system/permission_denied` for an offered host tool fails the turn instead of being retried, because it means the call never reached Pi.
+- A Pi tool server that the handshake reports as not connected fails the turn instead of running without tools.

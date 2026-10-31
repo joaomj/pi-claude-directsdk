@@ -20,6 +20,6 @@ The stream wrapper imports `@earendil-works/pi-ai/compat`, which Pi resolves for
 
 ## Verification
 
-The installed-Pi harness checks offline model listing and verifies that no Claude child starts. Paid scenarios verify fresh requests and complete-session forks through the user’s real Pi executable.
+`npm test` runs the transport against a scripted SDK runtime and needs no credentials. `npm run smoke` verifies a real tool round trip through the installed Claude Code, and a full Pi run verifies the same path through Pi. See [testing.md](testing.md).
 
 Offline listing is not an interactive editor-readiness benchmark. The harness does not promise zero extension overhead. See [testing.md](testing.md).

@@ -7,79 +7,77 @@
 | Symptom | Kind or source | Action |
 |---|---|---|
 | No `claude` on `PATH` | `missing` | Install with `npm install -g @anthropic-ai/claude-code` or set `CLAUDE_DIRECTSDK_COMMAND` to the executable path. |
-| CLI installed but not logged in | `logged-out` | Run `claude auth login` as the user Pi runs as, set `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) in the environment Pi runs in, or point `CLAUDE_DIRECTSDK_CONFIG_DIR` at a logged-in config directory. Then select the provider again. |
+| CLI installed but not logged in | `logged-out` | Run `claude auth login` as the user Pi runs as, set `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) in the environment Pi runs as, or point `CLAUDE_DIRECTSDK_CONFIG_DIR` at a logged-in config directory. Then select the provider again. |
 | Conflicting auth or backend overrides | `env-conflict` | Remove the named variables from the launching environment. Values are never printed. |
+| The Agent SDK cannot be loaded | `sdk` | Reinstall with dependencies: `npm install --omit=optional`. The optional CLI bundle is not required, because Pi uses the installed `claude`. |
+| The SDK handshake fails or the CLI exits mid-turn | `sdk` | Read the reported CLI path and stderr tail. Update Claude Code or set `CLAUDE_DIRECTSDK_COMMAND` to another build. |
 | A turn used usage credits | `billing` | The turn may already be charged. Later turns stop unless `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` is set. Disable usage credits in the Claude account settings to stay on plan limits. |
+| Claude Code refused a tool Pi offered | `tool` | Read the message. A `system/permission_denied` for a host tool, or a Pi tool server reported as not connected, is a transport fault: the call never reached Pi and the turn stops instead of running without tools. |
+| Claude called a tool Pi did not offer | `tool` | The turn fails. Pi never executes a tool outside the current inventory. Restart the session if this repeats. |
 | Catalog refresh fails | catalog | Read the warning for the source or CLI failure. Open `/model` in interactive Pi and wait for refresh. No pinned fallback is used. |
 | Model excluded from catalog | metadata | Read the warning for the missing field. Update Claude Code if picker metadata is incomplete. Unverified limits and prices are never guessed. |
 | No DirectSDK models on a fresh offline install | catalog | Connect once, start interactive Pi, and open `/model`. Wait for refresh before selecting a model from the command line. |
-| History cannot be replayed | `replay` | Compact or restart the session. Common causes: an empty assistant message, assistant prefill, an unsupported content block, or a tool call outside the current inventory on a model without mid-conversation tool changes. |
-| Prompt is too long | `native` | Read the reported route and context window. Remove stale `contextWindow` overrides in `models.json` to use verified limits, or compact the session. |
-| Native request failed | `native` | Read the native detail in the message. |
-| `Response was truncated before completion` and no answer | `native` | The turn spent its whole output budget on thinking. Lower the thinking level or switch models, then retry. |
-| Upstream response incomplete | `upstream` | Retry the request. |
-| Request timed out | `timeout` | Retry the request. The default timeout is 180 seconds. |
-| Request cancelled | `cancelled` | Re-run the request. Cancel kills the full child process tree. |
+| Prompt is too long | `native` | Read the reported context window. Remove stale `contextWindow` overrides in `models.json` to use verified limits, or compact the session. |
+| A step ended without output or usage | `incomplete` | The session ended mid-step or returned no usage. Retry the request; the next call rebuilds the session from Pi's history. |
+| Truncated with no answer | `native` | The turn spent its whole output budget on thinking. Lower the thinking level or switch models, then retry. |
+| Request timed out | `timeout` | Retry the request. The default timeout is 180 seconds per step, not for the whole turn. |
+| Request cancelled | `cancelled` | Re-run the request. Cancel interrupts the session, settles any parked tool call without running it, and closes the process. |
 
-Missing CLI and logged-out CLI fail before any upstream contact. The messages are actionable and safe to show.
+Missing CLI, logged-out CLI, and a failed SDK handshake fail before any upstream contact. The messages are actionable and safe to show.
 
 ## Compiled Pi compatibility
 
-Upgrade to DirectSDK v0.1.7 or later if compiled Pi shows either symptom:
+Version 0.1.7 fixed two compiled-Pi failures for the earlier direct-CLI transport: catalog cleanup under Bun, and an MCP helper that restarted Pi instead of answering tool calls. Catalog discovery still uses that helper path, so keep v0.1.7 or later if compiled Pi reports `Claude discovery cleanup failed` or `ERR_SERVER_NOT_RUNNING`.
 
-- Catalog refresh fails with `Claude discovery cleanup failed` or `ERR_SERVER_NOT_RUNNING`, even after the CLI picker succeeds.
-- Model calls create extra Pi sessions in the native child working directory, or the helper reports `No API key found for the selected model` instead of answering MCP requests.
-
-Version 0.1.7 handles Bun's server-shutdown behavior and starts the MCP helper in Bun runtime mode instead of restarting Pi. Do not set `BUN_BE_BUN` globally: the provider applies it only to the helper.
+The transport itself no longer spawns the helper: the Agent SDK starts Claude Code. Do not set `BUN_BE_BUN` globally.
 
 Follow the [upgrade instructions](../README.md#upgrade), restart Pi, then open `/model` and wait for refresh. In Pi 1.3.0, `pi update --models` does not load this extension.
 
 ## High token usage
 
-Use DirectSDK v0.1.7 or later to get the historical prompt-cache repair. The provider still sends history on each call. A cache hit reuses a stable prefix; it does not eliminate history transmission.
+The session, not the request, carries the history: a tool round trip or a follow-up message continues the same Claude Code process, so the prompt prefix and its cache stay in place. A rebuilt session starts a new prefix.
 
-Check cache-read share in message diagnostics across a stable, sufficiently long conversation. Short conversations, changed prompts or tools, cache expiry, and upstream eviction can prevent reuse. Token counters do not establish subscription allowance deductions. See [transport-measurements.md](transport-measurements.md) for the recorded evidence and its limits.
+Check the token counters in the session diagnostic across a longer conversation. Short conversations, changed prompts or tools, model switches, and cache expiry all start a new prefix. Token counters do not establish subscription allowance deductions.
+
+If a conversation grows expensive, remember that Pi owns compaction. Claude Code's automatic compaction is disabled, so Pi's own compaction is what shrinks a long session.
 
 ## Environment reference
 
 | Variable | Set by | Purpose |
 |---|---|---|
 | `CLAUDE_DIRECTSDK_COMMAND` | User | Override the `claude` executable path or argv head. Used by `resolveClaude`. |
-| `CLAUDE_DIRECTSDK_CONFIG_DIR` | User | Logged-in config directory. Mapped to `CLAUDE_CONFIG_DIR` for children and setup probes. Never forwarded under its own name. |
+| `CLAUDE_DIRECTSDK_CONFIG_DIR` | User | Logged-in config directory. Mapped to `CLAUDE_CONFIG_DIR` for the child and for discovery probes. Never forwarded under its own name. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | User | Token from `claude setup-token` for environments without an interactive login. |
-| `CLAUDE_CODE_MAX_OUTPUT_TOKENS` | Provider | The model's `maxTokens`, or Pi's per-call override. Claude Code replaces the request's `max_tokens` with its own default of 32,000 for models missing from its table, so the model limit reaches the child through this variable. |
 | `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` | User | Set to `1` to allow turns that Claude Code reports as charged to usage credits. Unset or `0` stops later turns after overage. |
-| `CLAUDE_DIRECTSDK_ENTRYPOINT` | User | Client label for `cc_entrypoint`, which plan usage is metered by. Defaults to `pi-claude-directsdk` and replaces an inherited label. An empty value lets Claude Code label the session. Must be 1 to 64 characters of letters, digits, dot, underscore, or hyphen. |
-| `PI_DIRECTSDK_TEST_UPSTREAM` | Development only | Bypass the subscription environment guard for an explicit custom endpoint. Never set it in normal subscription use. |
+| `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, `CLAUDE_CODE_TOTAL_TOKENS_REMINDER` | Provider | Set in the child environment so Pi owns compaction and budgets. |
+| `PI_DIRECTSDK_TEST_UPSTREAM` | Development only | Bypass the subscription environment guard for loopback test fixtures. Never set it in normal subscription use. |
+
+The client label Claude Code reports is now set by the Agent SDK. The former `CLAUDE_DIRECTSDK_ENTRYPOINT` override is gone, along with the inherited label it replaced. See [usage.md](usage.md#plan-usage-metering).
 
 ## Subscription guard
 
-Subscription mode refuses conflicting native auth and backend overrides in the merged environment: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and `CLAUDE_CODE_USE_FOUNDRY`. The error names the variables without printing values. The development override `PI_DIRECTSDK_TEST_UPSTREAM=1` bypasses this guard. The installed-Pi harness does not set it.
+Subscription mode refuses conflicting native auth and backend overrides in the merged environment: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and `CLAUDE_CODE_USE_FOUNDRY`. The error names the variables without printing values. The development override `PI_DIRECTSDK_TEST_UPSTREAM=1` bypasses this guard.
 
 ## Usage credits
 
 Claude Code can report that a response used pay-as-you-go usage credits instead of plan limits. DirectSDK stops the turn with a `billing` error unless `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` is set. The error names the reported status and reset time. The guard runs after the response and usage are captured, so it cannot undo the charge for that turn.
 
-Upstream rejections that mention third-party usage, extra usage, or usage credits produce the same error. Pi's retry classifier treats messages containing `billing` as non-retryable. To stay on plan limits only, disable usage credits in the Claude account settings and leave the override unset. Do not set the override just to silence the error.
+Upstream rejections that mention third-party usage, extra usage, or usage credits produce the same error. Pi's retry classifier treats the message as non-retryable. To stay on plan limits only, disable usage credits in the Claude account settings and leave the override unset. Do not set the override just to silence the error.
 
-Completed and failed turns carry a `pi-claude-directsdk/rate-limit` diagnostic when the native child reported rate-limit status.
+Completed and failed turns carry a `pi-claude-directsdk/rate-limit` diagnostic when Claude Code reported rate-limit status.
 
 ## Version mismatch
 
-The qualified CLI range is `>=2.1.263 <2.2.0` (`QUALIFIED_CLI_RANGE` in `src/models.ts`). The detected version is recorded per call. Behavior failures outside the range fail at runtime. Install the qualified version from [README](../README.md#install), then run the installed-Pi verification scenarios from [testing.md](testing.md).
+There is no qualified version range. Each session start is the test: the SDK handshake must complete, and a failure reports the CLI path, its message, and the stderr tail. Claude Code 2.1.281 with Agent SDK 0.3.316 is the version under test. See [testing.md](testing.md) for the checks to run before you rely on a newer CLI.
+
+The SDK itself is pinned to an exact version in `package.json`, because its message shapes and options are what this transport reads.
 
 ## Session recovery
 
-Switching providers does not require compaction or a restart. Thinking without a matching native carrier is replayed as ordinary assistant text. This also applies after editing an assistant message that carried signed thinking.
+Switching providers needs no restart. A rebuilt session receives Pi's history as text, including completed tool results, so no operation is repeated. Thinking is not carried across a rebuild: Claude Code streams it as an encrypted signature, and Pi never attaches a stale signature to rewritten content.
 
-For other unsupported history, compact or restart the session. Do not hand-edit session files to reattach native blocks. A stale signature is never attached to rewritten content by design.
-
-## Tool changes
-
-Models whose built-in metadata supports mid-conversation tool changes replay `tool_addition` and `tool_removal` blocks at assistant boundaries. A tool used earlier in the conversation can be removed from the current inventory without failing replay. Pi still validates the model response against the current inventory, so a removed tool is never executed.
-
-Unsupported models keep the collapsed system message and current tool set. On those models, removing a tool after it was used can still produce `Tool call outside the current inventory`; compact or restart the session.
+Editing an earlier message, branching, resuming, compacting, or changing the model or tool set rebuilds the session. Pi does not try to preserve a Claude session whose context it can no longer describe exactly.
 
 ## Cross-provider history
 
-The provider replays foreign thinking as ordinary text and maps incompatible tool-call IDs together with their result references. Failed or aborted responses with empty text or thinking placeholders do not block the next request. The stored session remains unchanged.
+Pi's transcript is the record. A conversation started on another provider is rebuilt from that transcript on the first DirectSDK call: assistant text, tool calls, and tool results become plain text in the checkpoint. Failed or aborted responses with empty content are omitted, and the stored session is never modified.

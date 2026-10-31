@@ -1,5 +1,7 @@
 # Roadmap
 
+> Historical roadmap for the direct CLI transport. The [architecture decision](adr/001-official-agent-sdk.md) records why the Agent SDK replaced it, and the SDK transport now implements that migration. This document stays as the record of what the transport had to preserve.
+
 Protect DirectSDK's request boundaries, measure its remaining overhead, and evaluate whether the Anthropic Agent SDK can reduce maintenance without changing Pi ownership.
 
 These stages are ordered. Persistent Claude sessions and an SDK migration are not committed changes.
@@ -19,7 +21,7 @@ Build repeatable checks for the behavior that distinguishes DirectSDK:
 
 Prefer a small set of public-boundary checks using real subprocesses and local endpoints over tests coupled to internal implementation. Review and approve each proposed test before adding it.
 
-Current coverage: `npm test` checks admission, replay carriers, environment guards, the usage-credit guard, and the tool-change plan. It uses a fake native child and loopback endpoints. Real-upstream beta acceptance, cancellation, and process-tree behavior remain installed-Pi or manual checks.
+Current coverage: `npm test` checks the Agent SDK transport through its own entry point against a scripted runtime: the tool round trip across model calls, parallel calls, session rebuild, cancellation, the usage-credit guard, and the isolation options. `npm run smoke` checks the tool round trip on the real binary. Long-session cache behavior, cross-restart behavior, and compiled-Pi launches remain manual checks. See [testing.md](testing.md).
 
 Keep routine regression checks offline and free of subscription usage. Use a small, explicitly approved paid verification path for behavior that requires real Claude generation or upstream cache reuse. Local request inspection cannot establish a real cache hit.
 
@@ -29,7 +31,7 @@ Completion criteria: the agreed checks run repeatably, detect violations of thes
 
 The cache repair, connection pooling, and stable native working directory address different sources of overhead and cache invalidation. They do not remove the fresh Claude process or serialized history replay on every Pi model call.
 
-The [transport measurements](transport-measurements.md) demonstrate high warm-cache reuse, including across a Pi restart. The original 436.408 ms median child-spawn-to-replay interval predates subsequent changes. It is not a current estimate or a measured comparison with Bridge.
+The measurements that supported this stage described the direct-CLI transport and were removed with it. Warm-cache reuse for the Agent SDK transport of a continued session is expected but not measured. The 436.408 ms median child-spawn-to-replay interval and the 99.6 to 99.8 percent cache-read shares belong to that removed transport and do not apply here.
 
 Measure the current implementation before changing its lifecycle:
 

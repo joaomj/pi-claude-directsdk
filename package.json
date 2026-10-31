@@ -24,8 +24,6 @@
   "files": [
     "extensions/**/*",
     "src/**/*",
-    "scripts/verify.py",
-    "scripts/verify_warm.py",
     "docs/**/*",
     "README.md",
     "LICENSE",
@@ -58,7 +56,6 @@
     "check": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --experimental-strip-types --disable-warning=DEP0205 --import ./tests/register.mjs --test \"tests/*.test.ts\"",
-    "verify": "python3 scripts/verify.py startup",
     "smoke": "node --experimental-strip-types --disable-warning=DEP0205 --import ./tests/register.mjs scripts/smoke.mjs"
   },
   "dependencies": {
