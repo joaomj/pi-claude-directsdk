@@ -81,7 +81,7 @@ Would hand native tools or workflow control to Claude Code. Rejected because the
 
 ## Qualification and follow-up
 
-The migration's acceptance criteria still govern release. Session recovery, supported versions, installation behavior, configuration migration, and the usage-credit signals are settled by tests and by [Measurements](../measurements.md). Unverified: cache behaviour across a Pi restart, conversations longer than three turns, compaction, Windows, and compiled Pi.
+The migration's acceptance criteria still govern release. Session recovery, supported versions, installation behavior, configuration migration, and the usage-credit signals are settled by tests and by [Measurements](../measurements.md). Unverified: cache lifetime beyond the 28-minute gap measured, conversations longer than six turns, Windows, and compiled Pi.
 
 The existing README and architecture describe the shipped implementation until migration lands. The old roadmap's requirement to preserve exact replay, exclusive Pi prompt ownership, and one-request admission no longer gates this migration.
 

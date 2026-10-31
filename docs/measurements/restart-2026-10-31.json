@@ -1,0 +1,208 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "paddedSystemPromptChars": 33626,
+  "before": [
+    {
+      "prompt": "Red, yellow, and blue.",
+      "stopReason": "stop",
+      "usage": {
+        "input": 10,
+        "output": 270,
+        "cacheRead": 0,
+        "cacheWrite": 12382
+      },
+      "costUsd": 0.026124,
+      "wallMs": 3973,
+      "input": 10,
+      "output": 270,
+      "cacheRead": 0,
+      "cacheWrite": 12382,
+      "promptTokens": 12392,
+      "totalTokens": 12662,
+      "cacheReadShare": 0
+    },
+    {
+      "prompt": "Orange, green, and purple.",
+      "stopReason": "stop",
+      "usage": {
+        "input": 10,
+        "output": 102,
+        "cacheRead": 12382,
+        "cacheWrite": 293
+      },
+      "costUsd": 0.028468200000000003,
+      "wallMs": 1197,
+      "input": 10,
+      "output": 102,
+      "cacheRead": 12382,
+      "cacheWrite": 293,
+      "promptTokens": 12685,
+      "totalTokens": 12787,
+      "cacheReadShare": 0.9761
+    }
+  ],
+  "vanillaBefore": [
+    {
+      "prompt": "Red, yellow, and blue are the three primary colours.",
+      "stopReason": "end_turn",
+      "usage": {
+        "input": 10,
+        "output": 240,
+        "cacheRead": 12318,
+        "cacheWrite": 17277
+      },
+      "costUsd": 0.0379458,
+      "numTurns": 1,
+      "wallMs": 5699,
+      "init": {
+        "version": "2.1.281",
+        "tools": 36,
+        "mcpServers": 1,
+        "sessionId": "6a5c42c9-e43b-4cd4-b5a3-a308d95827ce"
+      },
+      "rateLimit": [
+        {
+          "status": "allowed",
+          "resetsAt": 1793495400,
+          "rateLimitType": "five_hour",
+          "overageStatus": "rejected",
+          "overageDisabledReason": "org_level_disabled",
+          "isUsingOverage": false,
+          "unifiedWindows": {
+            "five_hour": {
+              "utilization": 0.2,
+              "resetsAt": 1793495400
+            },
+            "seven_day": {
+              "utilization": 0.2,
+              "resetsAt": 1793782800
+            }
+          }
+        }
+      ],
+      "stderr": null,
+      "input": 10,
+      "output": 240,
+      "cacheRead": 12318,
+      "cacheWrite": 17277,
+      "promptTokens": 29605,
+      "totalTokens": 29845,
+      "cacheReadShare": 0.4161
+    },
+    {
+      "prompt": "Orange, green, and violet are the three secondary colours.",
+      "stopReason": "end_turn",
+      "usage": {
+        "input": 10,
+        "output": 94,
+        "cacheRead": 29595,
+        "cacheWrite": 292
+      },
+      "costUsd": 0.0419693,
+      "numTurns": 1,
+      "wallMs": 3483,
+      "init": {
+        "version": "2.1.281",
+        "tools": 36,
+        "mcpServers": 1,
+        "sessionId": "6a5c42c9-e43b-4cd4-b5a3-a308d95827ce"
+      },
+      "rateLimit": [
+        {
+          "status": "allowed",
+          "resetsAt": 1793495400,
+          "rateLimitType": "five_hour",
+          "overageStatus": "rejected",
+          "overageDisabledReason": "org_level_disabled",
+          "isUsingOverage": false,
+          "unifiedWindows": {
+            "five_hour": {
+              "utilization": 0.2,
+              "resetsAt": 1793495400
+            },
+            "seven_day": {
+              "utilization": 0.2,
+              "resetsAt": 1793782800
+            }
+          }
+        }
+      ],
+      "stderr": null,
+      "input": 10,
+      "output": 94,
+      "cacheRead": 29595,
+      "cacheWrite": 292,
+      "promptTokens": 29897,
+      "totalTokens": 29991,
+      "cacheReadShare": 0.9899
+    }
+  ],
+  "gapMs": null,
+  "after": {
+    "prompt": "Red, yellow, blue, orange, green, purple.",
+    "stopReason": "stop",
+    "usage": {
+      "input": 10,
+      "output": 347,
+      "cacheRead": 11887,
+      "cacheWrite": 578
+    },
+    "costUsd": 0.0040897,
+    "wallMs": 4741,
+    "input": 10,
+    "output": 347,
+    "cacheRead": 11887,
+    "cacheWrite": 578,
+    "promptTokens": 12475,
+    "totalTokens": 12822,
+    "cacheReadShare": 0.9529
+  },
+  "vanillaAfter": {
+    "prompt": "Red, yellow, blue, orange, green, violet.",
+    "stopReason": "end_turn",
+    "usage": {
+      "input": 10,
+      "output": 110,
+      "cacheRead": 29887,
+      "cacheWrite": 147
+    },
+    "costUsd": 0.045812,
+    "numTurns": 1,
+    "wallMs": 3979,
+    "init": {
+      "version": "2.1.281",
+      "tools": 36,
+      "mcpServers": 1,
+      "sessionId": "6a5c42c9-e43b-4cd4-b5a3-a308d95827ce"
+    },
+    "rateLimit": [
+      {
+        "status": "allowed",
+        "resetsAt": 1793495400,
+        "rateLimitType": "five_hour",
+        "overageStatus": "rejected",
+        "overageDisabledReason": "org_level_disabled",
+        "isUsingOverage": false,
+        "unifiedWindows": {
+          "five_hour": {
+            "utilization": 0.21,
+            "resetsAt": 1793495400
+          },
+          "seven_day": {
+            "utilization": 0.2,
+            "resetsAt": 1793782800
+          }
+        }
+      }
+    ],
+    "stderr": null,
+    "input": 10,
+    "output": 110,
+    "cacheRead": 29887,
+    "cacheWrite": 147,
+    "promptTokens": 30044,
+    "totalTokens": 30154,
+    "cacheReadShare": 0.9948
+  },
+  "idleMs": 309
+}

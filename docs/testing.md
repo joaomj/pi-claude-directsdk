@@ -72,8 +72,10 @@ Results for the Agent SDK transport, all on the installation above:
 - `npm test`: 18 of 18 pass.
 - `npm run measure cancellation`: a cancelled turn returns `aborted`; closing with a parked tool call reaps the CLI in 6.9 s; a `SIGSTOP`ped CLI trips the frame deadline with a `timeout` error; no `claude` process survives.
 - `npm run measure session` and `npm run measure cache`: 98.8 to 98.9 percent cache-read share on continued turns, no cache activity below roughly 4,000 prompt tokens, and 94.9 percent reuse of the instruction prefix after a rebuild.
+- `npm run measure restart`: a new process read back the instruction prefix written by the previous one 309 ms earlier, and rewrote the flattened conversation.
+- `npm run measure compaction`: the prompt fell from 13,192 to 3,709 tokens and the first turn after compaction had no cache activity at all.
 
-Not verified: cache behaviour across a Pi restart, long conversations beyond three turns, compaction, Windows and compiled-Pi launches. Earlier releases measured the direct-CLI transport that this version replaces; those results do not carry over, because the request path and the process lifecycle changed.
+Not verified: cache lifetime beyond the 28-minute gap observed, conversations longer than six turns, Windows and compiled-Pi launches. Earlier releases measured the direct-CLI transport that this version replaces; those results do not carry over, because the request path and the process lifecycle changed.
 
 ## Options and safety
 

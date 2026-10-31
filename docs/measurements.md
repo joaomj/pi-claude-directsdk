@@ -1,8 +1,8 @@
 # Measurements
 
-Three questions were measured against the installed Claude Code on 2026-10-31: how much a turn costs in tokens compared with plain `claude -p`, whether a continued session reuses its prompt cache, and what happens when a turn is cancelled or the CLI stops producing output.
+Five questions were measured against the installed Claude Code on 2026-10-31: how much a turn costs in tokens compared with plain `claude -p`, whether a continued session reuses its prompt cache, what survives a process restart, what Pi compaction does to the next turn, and what happens when a turn is cancelled or the CLI stops producing output.
 
-All three results come from the same installation:
+All results come from the same installation:
 
 | Component | Version |
 |---|---|
@@ -18,6 +18,8 @@ Raw results are committed beside this document as `docs/measurements/*.json`. Th
 
 - **Token cost.** For the same three-turn conversation, the transport sent 37,526 prompt tokens where `claude -p --resume` sent 88,700, and Claude Code's own cost estimate was $0.0293 against $0.0684. The gap is the 28 native tools and the larger base prompt that vanilla ships.
 - **Cache use.** A continued session reaches **98.8% cache-read share** once the prompt is large enough to be cacheable. Below roughly 4,000 prompt tokens the transport shows no cache activity at all: no reads and no writes.
+- **Across a restart.** A new process read back **11,887 tokens** of instruction prefix that the previous process had written 309 ms earlier. The conversation itself was rewritten, because a rebuild sends history as one flattened message; `claude -p --resume` read its whole conversation back instead.
+- **Compaction.** Pi compaction cut the prompt from 13,192 to 3,709 tokens, and the first turn after it had **no cache at all** (zero reads, zero writes) and took 3,956 ms against 1,682 ms for an ordinary continued turn.
 - **Cancellation.** Cancelling mid-generation returns `aborted` and keeps the partial text. Closing with a parked tool call reaps the process in about 7 seconds. A frozen CLI trips the frame deadline with a `timeout` error, and no process survives.
 
 ## Method
@@ -25,8 +27,12 @@ Raw results are committed beside this document as `docs/measurements/*.json`. Th
 ```sh
 npm run measure session        # token velocity and cache, short prompt
 npm run measure cache          # the same with a 33,573-character instruction block
+npm run measure restart        # cache reuse across a process restart
+npm run measure compaction     # what Pi compaction does to the next turn
 npm run measure cancellation   # cancel, close, and stall
 ```
+
+`session`, `cache`, and `restart` run both arms. `compaction` measures the transport only, because forcing Claude Code's own compaction into a comparable state is not scriptable.
 
 Both arms answer the same three user turns: name three primary colours, name three secondary colours, then list all six. The transport arm runs them in **one** session. The vanilla arm runs them as three `claude -p` invocations, the first with `--session-id` and the rest with `--resume`, so both arms carry the same conversation.
 
@@ -75,7 +81,43 @@ The cache either works completely or not at all, and the deciding factor is prom
 
 The practical consequence: a short conversation pays full input price on every turn, and it is still cheaper than vanilla's cached 20k prompt. A long conversation pays about 1% of the prompt price after the first turn.
 
-## 3. Cancellation and stalls
+## 3. Cache across a restart
+
+`restart` runs two turns on one live session, closes every session, and hands the same history to a **new process**. The transport keeps nothing on disk, so the second process rebuilds the conversation from text. Both arms resume the same history; the vanilla arm does it with `--resume`. The instruction block carries a per-run marker, so a cache read in the second process can only come from that run's own write.
+
+| Arm | Turn | Prompt | Cache read | Cache write | Share | Wall |
+|---|---|---|---|---|---|---|
+| Transport, process 1 | 1 | 12,392 | 0 | 12,382 | 0 | 3,973 ms |
+| Transport, process 1 | 2 | 12,685 | 12,382 | 293 | 97.6% | 1,197 ms |
+| Transport, process 2 | 3 | 12,475 | 11,887 | 578 | 95.3% | 4,741 ms |
+| Vanilla, process chain | 1 | 29,605 | 12,318 | 17,277 | 41.6% | 5,699 ms |
+| Vanilla, process chain | 2 | 29,897 | 29,595 | 292 | 99.0% | 3,483 ms |
+| Vanilla, process 3 | 3 | 30,044 | 29,887 | 147 | 99.5% | 3,979 ms |
+
+The gap between what the transport read and what it wrote is the rebuild, not a cache failure. A rebuilt session sends the conversation as one flattened message, so only the instruction prefix can match the previous request; the conversation (578 tokens here) is sent again as a cache write. `--resume` replays the original message sequence and reads the whole thing back.
+
+The cache entry itself survives the restart. It also outlives the session that wrote it: an identical instruction block written during a run that finished at 19:07:58 was still read back at 19:35:41 in a different process, roughly **28 minutes** later.
+
+## 4. Compaction
+
+Pi owns compaction, so the transport never sees a Claude Code compaction. When Pi compacts, it replaces the earlier history with a summary message and keeps recent entries. The session cannot match after that, so the next turn is a rebuild.
+
+The workload pastes a 33,573-character document, asks about it for four turns, then continues the same session once. Then the same question runs against the compacted history: Pi's own summary wrapper, the last kept answer, and the new request.
+
+| Turn | Prompt | Cache read | Cache write | Share | Wall |
+|---|---|---|---|---|---|
+| 1, document pasted | 12,407 | 0 | 12,397 | 0 | 4,314 ms |
+| 2 | 12,649 | 12,397 | 242 | 98.0% | 1,223 ms |
+| 3 | 12,775 | 12,639 | 126 | 98.9% | 2,225 ms |
+| 4 | 13,043 | 12,765 | 268 | 97.9% | 1,440 ms |
+| 5, same session | 13,192 | 13,033 | 149 | 98.8% | 1,682 ms |
+| 6, after compaction | 3,709 | 0 | 0 | 0 | 3,956 ms |
+
+Compaction does what it promises for size: the prompt falls by 72%, so every later turn sends about 28% of the tokens the earlier ones did. It also lands under the cacheable minimum, so caching stops entirely: turn 6 read nothing and wrote nothing, and the following turns stay uncached until the prompt grows past roughly 4,000 tokens again.
+
+Turn 6 is also the slowest of the six, because a rebuild starts a new process and pays the handshake. One sample; the ordering of the earlier turns shows wall time moves with network conditions too.
+
+## 5. Cancellation and stalls
 
 Three cases, each on the real binary through the transport:
 
@@ -98,4 +140,6 @@ These numbers answer less than they appear to.
 - **No vanilla interactive arm.** `claude` in a terminal has its own startup and prompt composition, and was not measured. The comparison arm is the closest scriptable equivalent.
 - **One model, one machine, one run per arm.** Cache thresholds, prompt composition, and startup cost differ by model and platform.
 - **The cost estimate is Claude Code's, not a bill.** It prices tokens against a published list; it does not observe plan deductions.
-- **Not covered:** long conversations beyond three turns, compaction, multiple concurrent sessions, Windows, and compiled Pi.
+- **Cache lifetime is bounded by observation, not by a documented rule.** The longest gap measured here is about 28 minutes. Anthropic's published cache lifetimes and Claude Code's chosen TTL are the reference; a gap longer than that was not tested.
+- **Compaction is simulated.** Pi's summary wrapper and kept-recent-entry layout are reproduced, but the summary text is written by hand instead of generated, and Pi's own cut point is not exercised.
+- **Not covered:** conversations beyond six turns, multiple concurrent sessions, Windows, and compiled Pi.

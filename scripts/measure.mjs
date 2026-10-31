@@ -3,6 +3,9 @@
  * Measurements against the installed Claude Code.
  *
  *   node ... scripts/measure.mjs session        token velocity and cache reuse
+ *   node ... scripts/measure.mjs cache          the same with a padded instruction block
+ *   node ... scripts/measure.mjs restart        cache reuse across a process restart
+ *   node ... scripts/measure.mjs compaction     what Pi compaction does to the next turn
  *   node ... scripts/measure.mjs cancellation   cancel during generation, cancel
  *                                               with a parked tool call, stalled CLI
  *
@@ -12,6 +15,10 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
 import { closeAllSessions, streamClaudeDirectSdk } from "../src/sdk/stream.ts";
 
@@ -110,6 +117,20 @@ async function transportTurn(sessionId, messages, signal, systemPrompt) {
       ?.details?.nativeCostUsd ?? null,
     wallMs: now() - started,
   };
+}
+
+/** Add the assistant answer to the history, as Pi stores it. */
+function appendAssistant(messages, turn) {
+  return [...messages, {
+    role: "assistant",
+    api: "claude-directsdk",
+    provider: "claude-directsdk",
+    model: MODEL,
+    content: [{ type: "text", text: turn.prompt }],
+    stopReason: "stop",
+    usage: turn.usage,
+    timestamp: now(),
+  }];
 }
 
 /** One `claude -p` invocation, optionally continuing a session. */
@@ -456,9 +477,185 @@ async function cancellationMode() {
   return report;
 }
 
+/** The same three turns, split by a process restart on both arms. */
+async function restartMode() {
+  // The marker goes first so this run's instruction prefix is unique: a cache
+  // read after the restart can then only come from this run's own write.
+  const systemPrompt = `Measurement run ${randomUUID()}\n${pad()}\nYou are Pi. Answer in one line unless asked for more.`;
+  const report = {
+    model: MODEL,
+    paddedSystemPromptChars: systemPrompt.length,
+    before: [],
+    vanillaBefore: [],
+    gapMs: null,
+    after: null,
+    vanillaAfter: null,
+  };
+
+  // Phase 1: two turns on one live session, then the process tree goes away.
+  let messages = [];
+  for (const prompt of TURNS.slice(0, 2)) {
+    messages = [...messages, { role: "user", content: prompt, timestamp: now() }];
+    const turn = await transportTurn("restart-a", messages, undefined, systemPrompt);
+    report.before.push({ prompt, ...turn, ...summarise(turn.usage) });
+    messages = appendAssistant(messages, turn);
+  }
+
+  // The vanilla arm continues the same two turns, each in its own process.
+  const vanillaSession = randomUUID();
+  for (const [index, prompt] of TURNS.slice(0, 2).entries()) {
+    const turn = await vanillaTurn({
+      prompt,
+      sessionId: vanillaSession,
+      resume: index > 0,
+      appendSystemPrompt: systemPrompt,
+    });
+    report.vanillaBefore.push({ prompt, ...turn, ...summarise(turn.usage) });
+  }
+
+  closeAllSessions();
+  await waitForExit(null, 0);
+  log("phase 1 closed; starting a new process for the next turn");
+
+  const statePath = join(tmpdir(), `measure-restart-${randomUUID()}.json`);
+  writeFileSync(statePath, JSON.stringify({
+    systemPrompt,
+    messages,
+    vanillaSession,
+    nextPrompt: TURNS[2],
+    closedAt: now(),
+  }));
+  const closedAt = now();
+  const child = spawnSync(
+    process.execPath,
+    [...process.execArgv, fileURLToPath(import.meta.url), "restart-phase2", statePath],
+    { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 },
+  );
+  try {
+    unlinkSync(statePath);
+  } catch {
+    // A missing state file only means the child removed it first.
+  }
+  if (child.status !== 0) {
+    throw new Error(`phase 2 failed (${child.status}): ${(child.stderr ?? "").slice(-600)}`);
+  }
+  const after = JSON.parse(child.stdout.slice(child.stdout.indexOf("{")));
+  // How long the cache sat idle: the last turn ended before close, and phase 2
+  // issued its first request at startedAt in the new process.
+  report.idleMs = after.startedAt - closedAt;
+  report.after = { ...after.transport, ...summarise(after.transport.usage) };
+  report.vanillaAfter = { ...after.vanilla, ...summarise(after.vanilla.usage) };
+  return report;
+}
+
+/** Phase 2 of `restart`: a new process rebuilds the history and asks the next turn. */
+async function restartPhase2(statePath) {
+  const state = JSON.parse(readFileSync(statePath, "utf8"));
+  const startedAt = now();
+  const messages = [...state.messages, { role: "user", content: state.nextPrompt, timestamp: now() }];
+  // The transport keeps no session on disk, so this is a rebuild: the same
+  // history, a new CLI process. A cache hit here is server-side reuse.
+  const transport = await transportTurn("restart-b", messages, undefined, state.systemPrompt);
+  log("transport after restart", transport.stopReason, JSON.stringify(summarise(transport.usage)));
+  const vanilla = await vanillaTurn({
+    prompt: state.nextPrompt,
+    sessionId: state.vanillaSession,
+    resume: true,
+    appendSystemPrompt: state.systemPrompt,
+  });
+  log("vanilla after restart", vanilla.stopReason, JSON.stringify(summarise(vanilla.usage)));
+  closeAllSessions();
+  return { startedAt, transport, vanilla };
+}
+
+const DOC_TURN = (doc) => `Here are my project notes:\n\n${doc}\n\nHow many numbered rules did I paste? Answer in one line.`;
+
+/** Pi compaction replaces the history with a summary. Measure the next turn both ways. */
+async function compactionMode() {
+  // Unique marker first, so the first turn writes this run's prefix from cold
+  // instead of reading a prefix cached by an earlier run.
+  const systemPrompt = `Measurement run ${randomUUID()}\nYou are Pi. Answer in one line unless asked for more.`;
+  const report = { model: MODEL, turns: [], continued: null, compacted: null };
+
+  // A conversation that carries a large pasted document, the case compaction exists for.
+  const prompts = [
+    DOC_TURN(pad()),
+    "Which rule mentions quantity 7? Answer in one line.",
+    "Summarise rules 1 to 3 in one line.",
+    "Which rule numbers are named in rule 8? Answer in one line.",
+  ];
+  let messages = [];
+  for (const prompt of prompts) {
+    messages = [...messages, { role: "user", content: prompt, timestamp: now() }];
+    const turn = await transportTurn("compact", messages, undefined, systemPrompt);
+    log("turn", turn.stopReason, JSON.stringify(summarise(turn.usage)), `${turn.wallMs}ms`);
+    report.turns.push({ prompt: prompt.slice(0, 60), ...turn, ...summarise(turn.usage) });
+    messages = appendAssistant(messages, turn);
+  }
+
+  // Reference: the same session continues, history intact.
+  const nextPrompt = "In one line, what was the last question I asked?";
+  const continued = await transportTurn(
+    "compact",
+    [...messages, { role: "user", content: nextPrompt, timestamp: now() }],
+    undefined,
+    systemPrompt,
+  );
+  log("continued", continued.stopReason, JSON.stringify(summarise(continued.usage)));
+  report.continued = { ...continued, ...summarise(continued.usage) };
+
+  // Pi compacts: the history becomes a summary message, the recent entries are
+  // kept, and the session must be rebuilt. The summary wrapper is Pi's own text.
+  const summary = [
+    "The user pasted 260 numbered rules and asked questions about them.",
+    "The number of rules is 260.",
+    "The rule mentioning quantity 7 is rule 7, which keeps quantity 7 in position 7.",
+    "Rules 1 to 3 each keep their own quantity in their own position.",
+    "Rule 8 names rule 15 and rule 8.",
+  ].join(" ");
+  const summaryMessage = [
+    "The conversation history before this point was compacted into the following summary:",
+    "",
+    "<summary>",
+    summary,
+    "</summary>",
+  ].join("\n");
+  const compacted = await transportTurn(
+    "compact",
+    [
+      { role: "user", content: summaryMessage, timestamp: now() },
+      {
+        role: "assistant",
+        api: "claude-directsdk",
+        provider: "claude-directsdk",
+        model: MODEL,
+        content: [{ type: "text", text: report.turns.at(-1).prompt }],
+        stopReason: "stop",
+        usage: report.turns.at(-1).usage,
+        timestamp: now(),
+      },
+      { role: "user", content: nextPrompt, timestamp: now() },
+    ],
+    undefined,
+    systemPrompt,
+  );
+  log("after compaction", compacted.stopReason, JSON.stringify(summarise(compacted.usage)));
+  report.compacted = { ...compacted, ...summarise(compacted.usage) };
+  report.summaryChars = summary.length;
+  closeAllSessions();
+  return report;
+}
+
 const mode = process.argv[2] ?? "session";
+
 const report =
-  mode === "cancellation"
-    ? await cancellationMode()
-    : await sessionMode({ padded: mode === "cache" });
+  mode === "restart-phase2"
+    ? await restartPhase2(process.argv[3])
+    : mode === "cancellation"
+      ? await cancellationMode()
+      : mode === "restart"
+        ? await restartMode()
+        : mode === "compaction"
+          ? await compactionMode()
+          : await sessionMode({ padded: mode === "cache" });
 console.log(JSON.stringify(report, null, 2));

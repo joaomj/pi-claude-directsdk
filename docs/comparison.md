@@ -16,7 +16,7 @@ The DirectSDK column reflects this branch, its Agent SDK transport. The Bridge c
 | Authentication guards | Uses CLI login or a CLI setup token. Rejects conflicting API credentials, base URLs, and alternative backend settings before a session starts rather than switching billing routes. Stops after a reported usage-credit overage unless `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` is set. | Uses Claude Code authentication through the SDK. Its README warns that inherited Anthropic API environment variables can redirect the child. |
 | Startup and models | Cache-only startup and lazy loading of the SDK. Refresh combines the CLI account picker with Anthropic documentation to validate model metadata. | Registers models from Pi's Anthropic catalog, with plan and context-window settings. |
 | Compatibility and maintenance | Pins the SDK and MCP packages exactly and gates on the SDK handshake instead of a CLI version range. Maintains the tool bridge, the session digest and rebuild, and the MCP tool server. | Uses a versioned Agent SDK dependency, with an optional external CLI. Maintains session synchronization, prompt projection, and MCP tool bridging. |
-| Verification | 18 offline tests through the transport's own entry point against a scripted SDK runtime, a two-call real round trip (`npm run smoke`), and manual Pi runs. [Measurements](measurements.md) cover token cost, cache reuse, and cancellation on the real binary for one model on one machine. | Provides offline unit tests and API-backed integration tests. Test availability alone does not prove greater reliability. |
+| Verification | 18 offline tests through the transport's own entry point against a scripted SDK runtime, a two-call real round trip (`npm run smoke`), and manual Pi runs. [Measurements](measurements.md) cover token cost, cache reuse, restart behaviour, compaction, and cancellation on the real binary for one model on one machine. | Provides offline unit tests and API-backed integration tests. Test availability alone does not prove greater reliability. |
 | Additional features | Focused inference provider. | Optional `AskClaude` delegation, including read-only and full native-tool modes. |
 
 Because both sides now use the same SDK interface, the meaningful differences are where the conversation record lives, how a rebuild is decided, and which injection routes are open. DirectSDK closes more of them: no settings, no skills, no native tools, and no resumed session that could carry instructions Pi no longer shows.
@@ -33,6 +33,8 @@ Against `claude -p --resume` for the same three-turn conversation:
 | `claude -p --resume` | 88,700 | $0.0684 | 9,855 ms |
 
 The gap comes from Claude Code running with no native tools and no settings sources: the transport sends a 12.4k prompt where vanilla sends 28.9k, because vanilla advertises 28 tools. Cache behaviour is all or nothing by prompt size: no cache activity at 3.5k prompt tokens, 98.8 to 98.9 percent cache-read share at 12.4k. Wall time favours the transport mostly because one process serves every turn, and vanilla starts a new one per turn.
+
+A restart is not a cache miss for the instructions: a new process read the prefix back 309 ms later, and rewrote only the flattened conversation. Pi compaction cuts the prompt by 72% and drops it below the cacheable minimum, so caching stops until the prompt grows again.
 
 Subscription-window consumption remains unmeasured. Token counts and Claude Code's cost estimate are not a record of plan deductions, and the client label the two arms send differs.
 
