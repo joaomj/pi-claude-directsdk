@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isRetryableAssistantError } from "@earendil-works/pi-ai/compat";
 import {
   ALLOW_USAGE_CREDITS_ENV,
   usageCreditsAllowed,
@@ -21,7 +20,7 @@ test("a usage-credit rejection is an actionable, non-retryable billing error", (
   );
   assert.ok(rejection);
   assert.match(rejection.message, /^Claude Code billing:/);
-  assert.equal(isRetryableAssistantError(rejection), false);
+  assert.equal(rejection.kind, "billing");
   assert.equal(usageCreditsRejectionError("overloaded"), undefined);
 });
 
@@ -37,7 +36,7 @@ test("a reported overage names the charge, the reset, and the opt-in", () => {
   assert.match(error.message, new RegExp(`${ALLOW_USAGE_CREDITS_ENV}=1`));
   // A charge that already happened cannot be undone; say so.
   assert.match(error.message, /cannot|undo|further requests are not charged/);
-  assert.equal(isRetryableAssistantError(error), false);
+  assert.equal(error.kind, "billing");
 });
 
 test("an ordinary reply that mentions billing is not a provider failure", () => {

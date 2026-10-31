@@ -50,8 +50,9 @@ export function buildSdkOptions(input: SdkOptionsInput): Options {
     strictMcpConfig: true,
     // No skill listing or Skill tool.
     skills: [],
-    // Claude session state is an internal detail; Pi owns the transcript.
-    persistSession: true,
+    // Pi owns the transcript: Claude Code must not keep a second copy of the
+    // conversation in ~/.claude/projects, and this transport never resumes one.
+    persistSession: false,
     includePartialMessages: true,
     permissionMode: "dontAsk",
     systemPrompt: {

@@ -73,8 +73,10 @@ export interface ManagedSession {
   promptDigest: string;
   /** Tool call ids Claude Code is waiting on Pi to execute. */
   awaiting: string[];
-  /** Digest of the assistant step this session produced last. */
-  assistantDigest: string;
+  /** Number of Pi messages the session has already seen, assistant output included. */
+  historyLength: number;
+  /** Digest of those messages: any edit makes the session unusable. */
+  historyDigest: string;
 }
 
 /** Live sessions, keyed by the Pi conversation they belong to. */
@@ -206,16 +208,35 @@ function mapStopReason(stop: string, detail?: string): {
   }
 }
 
-function digestAssistant(message: AssistantMessage): string {
-  return createHash("sha256")
-    .update(JSON.stringify({
+/** Stable content of one message: timestamps and usage are not conversation. */
+function compactMessage(message: Message): Record<string, unknown> {
+  if (message.role === "user") return { role: "user", content: message.content };
+  if (message.role === "assistant") {
+    return {
+      role: "assistant",
       content: message.content.map((block) =>
         block.type === "toolCall"
           ? { type: "toolCall", id: block.id, name: block.name, arguments: block.arguments }
           : block,
       ),
       stopReason: message.stopReason,
-    }))
+    };
+  }
+  if (message.role === "toolResult") {
+    return {
+      role: "toolResult",
+      toolCallId: message.toolCallId,
+      toolName: message.toolName,
+      content: message.content,
+      isError: message.isError,
+    };
+  }
+  return { role: message.role };
+}
+
+function digestMessages(messages: Message[]): string {
+  return createHash("sha256")
+    .update(JSON.stringify(messages.map(compactMessage)))
     .digest("hex");
 }
 
@@ -267,6 +288,8 @@ interface PendingTool {
   index: number;
   id: string;
   name: string;
+  /** Streamed `input_json_delta` payload, before parsing. */
+  json: string;
 }
 
 /** Converts one Claude step's frames into Pi stream events. */
@@ -279,11 +302,19 @@ class Renderer {
   streamId: string | undefined;
   streamModel: string | undefined;
 
+  private readonly output: AssistantMessage;
+  private readonly push: (event: AssistantMessageEvent) => void;
+  private readonly bridge: ToolBridge;
+
   constructor(
-    private readonly output: AssistantMessage,
-    private readonly push: (event: AssistantMessageEvent) => void,
-    private readonly bridge: ToolBridge,
-  ) {}
+    output: AssistantMessage,
+    push: (event: AssistantMessageEvent) => void,
+    bridge: ToolBridge,
+  ) {
+    this.output = output;
+    this.push = push;
+    this.bridge = bridge;
+  }
 
   assistant(message: Record<string, unknown>): void {
     this.assistants.push(message);
@@ -344,7 +375,7 @@ class Renderer {
         if (block["type"] === "tool_use") {
           const id = typeof block["id"] === "string" ? block["id"] : "";
           const name = typeof block["name"] === "string" ? block["name"] : "";
-          this.pendingTools.push({ index, id, name });
+          this.pendingTools.push({ index, id, name, json: "" });
           const bare = toolBareName(name);
           if (id && bare) this.bridge.announce(id, bare);
         }
@@ -369,6 +400,11 @@ class Renderer {
           if (block?.type !== "thinking") return;
           block.thinking += delta["thinking"];
           this.push({ type: "thinking_delta", contentIndex: target.contentIndex, delta: delta["thinking"], partial: this.output });
+          return;
+        }
+        if (delta["type"] === "input_json_delta" && typeof delta["partial_json"] === "string") {
+          const tool = this.pendingTools.find((entry) => entry.index === index);
+          if (tool) tool.json += delta["partial_json"];
           return;
         }
         if (delta["type"] === "signature_delta" && typeof delta["signature"] === "string") {
@@ -421,20 +457,59 @@ class Renderer {
     }
   }
 
-  /** Tool calls from the completed step, in order. */
+  /**
+   * Tool calls from the completed step, in order.
+   *
+   * The streamed blocks are authoritative because Claude Code's complete
+   * `assistant` message can arrive after `message_stop`. The complete message
+   * is only a fallback for the input of a call that streamed without one.
+   */
   toolCalls(): Array<{ id: string; name: string; input: unknown }> {
-    const calls: Array<{ id: string; name: string; input: unknown }> = [];
+    const completed = new Map<string, unknown>();
     for (const assistant of this.assistants) {
       for (const block of Array.isArray(assistant["content"]) ? assistant["content"] : []) {
         if (!isRecord(block) || block["type"] !== "tool_use") continue;
-        calls.push({
-          id: typeof block["id"] === "string" ? block["id"] : "",
-          name: typeof block["name"] === "string" ? block["name"] : "",
-          input: block["input"],
-        });
+        if (typeof block["id"] === "string") completed.set(block["id"], block["input"]);
       }
     }
-    return calls;
+    if (this.pendingTools.length === 0) {
+      const calls: Array<{ id: string; name: string; input: unknown }> = [];
+      for (const assistant of this.assistants) {
+        for (const block of Array.isArray(assistant["content"]) ? assistant["content"] : []) {
+          if (!isRecord(block) || block["type"] !== "tool_use") continue;
+          calls.push({
+            id: typeof block["id"] === "string" ? block["id"] : "",
+            name: typeof block["name"] === "string" ? block["name"] : "",
+            input: block["input"],
+          });
+        }
+      }
+      return calls;
+    }
+    return this.pendingTools.map((tool) => ({
+      id: tool.id,
+      name: tool.name,
+      input: parseStreamedInput(tool.json, completed.get(tool.id)),
+    }));
+  }
+
+  /** Fill the answer from the complete message when no deltas arrived at all. */
+  adoptCompleted(): void {
+    if (this.progressive.length > 0 || this.pendingTools.length > 0) return;
+    const last = this.assistants[this.assistants.length - 1];
+    if (!last || !Array.isArray(last["content"])) return;
+    for (const block of last["content"]) {
+      if (!isRecord(block)) continue;
+      if (block["type"] === "text" && typeof block["text"] === "string") {
+        this.output.content.push({ type: "text", text: block["text"] });
+      } else if (block["type"] === "thinking" && typeof block["thinking"] === "string") {
+        this.output.content.push({
+          type: "thinking",
+          thinking: block["thinking"],
+          thinkingSignature: typeof block["signature"] === "string" ? block["signature"] : "",
+        } satisfies ThinkingContent);
+      }
+    }
   }
 
   refusalText(): string {
@@ -519,7 +594,8 @@ async function acquireSession(request: SessionRequest): Promise<Acquired> {
     toolNames,
     promptDigest,
     awaiting: [],
-    assistantDigest: "",
+    historyLength: 0,
+    historyDigest: "",
   };
   deps.sessions.set(key, managed);
   session.sendUser(checkpointText(checkpointPrompt(messages)));
@@ -527,16 +603,20 @@ async function acquireSession(request: SessionRequest): Promise<Acquired> {
 }
 
 function tryContinue(existing: ManagedSession, messages: Message[]): Acquired | null {
-  const trail = trailingToolResults(messages);
+  const known = messages.slice(0, existing.historyLength);
+  // Resume, branch, edit, or compaction changed the record: the live session no
+  // longer describes what Pi shows the user.
+  if (known.length !== existing.historyLength || digestMessages(known) !== existing.historyDigest) {
+    return null;
+  }
+  const tail = messages.slice(existing.historyLength);
   if (existing.awaiting.length > 0) {
-    if (trail.length === 0) return null;
-    const delivered = new Set(trail.map((result) => result.toolCallId));
-    if (delivered.size !== existing.awaiting.length) return null;
-    if (!existing.awaiting.every((id) => delivered.has(id))) return null;
-    const before = messages[messages.length - trail.length - 1];
-    if (before?.role !== "assistant") return null;
-    if (digestAssistant(before) !== existing.assistantDigest) return null;
-    for (const result of trail) {
+    const results = trailingToolResults(tail);
+    if (results.length !== tail.length) return null;
+    const ids = results.map((result) => result.toolCallId);
+    if (ids.length !== existing.awaiting.length) return null;
+    if (!existing.awaiting.every((id) => ids.includes(id))) return null;
+    for (const result of results) {
       if (!existing.session.bridge.deliver(result.toolCallId, toMcpResult(result))) {
         return null;
       }
@@ -544,14 +624,10 @@ function tryContinue(existing: ManagedSession, messages: Message[]): Acquired | 
     existing.awaiting = [];
     return { managed: existing, sent: false };
   }
-  const last = messages[messages.length - 1];
-  if (last?.role !== "user") return null;
-  const before = messages[messages.length - 2];
-  if (before?.role === "assistant" && digestAssistant(before) === existing.assistantDigest) {
-    existing.session.sendUser(userContent(last));
-    return { managed: existing, sent: true };
-  }
-  return null;
+  const only = tail[0];
+  if (tail.length !== 1 || only?.role !== "user") return null;
+  existing.session.sendUser(userContent(only));
+  return { managed: existing, sent: true };
 }
 
 async function executeCall(
@@ -665,7 +741,12 @@ async function executeCall(
 
     for (;;) {
       if (options.signal?.aborted) throw cancelledError();
-      const frame = await session.nextFrame(timeoutMs);
+      const frame = await session.nextFrame(timeoutMs).catch((error: unknown) => {
+        // A cancelled wait reports cancellation, not a silent Claude Code.
+        if (options.signal?.aborted) throw cancelledError();
+        throw error;
+      });
+      if (options.signal?.aborted) throw cancelledError();
       if (frame === null) {
         throw incompleteError(
           `Claude Code ended the session before the step completed${session.stderr() ? `, stderr: ${session.stderr()}` : ""}`,
@@ -745,6 +826,7 @@ async function executeCall(
       throw incompleteError("Claude stopped for tool use without any tool call");
     }
 
+    renderer.adoptCompleted();
     renderer.closeBlocks();
 
     const toolCalls: ToolCall[] = [];
@@ -795,7 +877,9 @@ async function executeCall(
 
     enforceUsageCredits(latestRateLimit, mergedEnv);
 
-    managed.assistantDigest = digestAssistant(output);
+    const known = nonSystem(context.messages);
+    managed.historyLength = known.length + 1;
+    managed.historyDigest = digestMessages([...known, output]);
     managed.awaiting = mapped.stopReason === "toolUse" ? toolCalls.map((call) => call.id) : [];
     keepSession = true;
     output.diagnostics = [
@@ -868,6 +952,17 @@ function resultFailure(detail: string, subtype: string | undefined, model: Model
     );
   }
   return sdkError(`${subtype ?? "failed"}: ${detail}`);
+}
+
+/** Tool input from streamed JSON, falling back to the complete message. */
+function parseStreamedInput(json: string, completed: unknown): unknown {
+  if (json.trim() === "") return completed ?? {};
+  try {
+    return JSON.parse(json) as unknown;
+  } catch {
+    if (completed !== undefined) return completed;
+    throw toolError(`Claude streamed tool input that is not valid JSON: ${json.slice(0, 200)}`);
+  }
 }
 
 function parseToolInput(input: unknown): JsonObject {
