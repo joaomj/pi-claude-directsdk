@@ -71,7 +71,7 @@ export function streamSimple(
   model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
   return lazyStream(model, async () => {
-    const { streamClaudeDirectSdk } = await import("./stream.js");
+    const { streamClaudeDirectSdk } = await import("./sdk/stream.js");
     return streamClaudeDirectSdk(model, context, options);
   });
 }

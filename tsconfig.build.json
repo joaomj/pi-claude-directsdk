@@ -3,7 +3,12 @@
   "compilerOptions": {
     "noEmit": false,
     "outDir": ".build",
-    "sourceMap": true
+    "sourceMap": true,
+    "allowImportingTsExtensions": false
   },
-  "include": ["src/**/*.ts", "extensions/**/*.ts", "types/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "extensions/**/*.ts",
+    "types/**/*.ts"
+  ]
 }

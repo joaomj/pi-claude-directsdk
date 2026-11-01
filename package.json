@@ -1,6 +1,6 @@
 {
   "name": "pi-claude-directsdk",
-  "version": "0.3.1",
+  "version": "1.0.0",
   "type": "module",
   "description": "Claude as a Pi model provider through the unmodified Claude Code executable. Pi owns the transcript and tools; the CLI supplies subscription authentication as a model transport.",
   "license": "MIT",
@@ -13,16 +13,22 @@
   "bugs": {
     "url": "https://github.com/joaomj/pi-claude-directsdk/issues"
   },
-  "keywords": ["pi-package", "pi", "extension", "claude", "claude-code", "model-provider"],
+  "keywords": [
+    "pi-package",
+    "pi",
+    "extension",
+    "claude",
+    "claude-code",
+    "model-provider"
+  ],
   "files": [
     "extensions/**/*",
     "src/**/*",
-    "scripts/verify.py",
-    "scripts/verify_warm.py",
-    "scripts/trace-native.mjs",
     "docs/**/*",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "scripts/smoke.mjs",
+    "scripts/measure.mjs"
   ],
   "publishConfig": {
     "access": "public"
@@ -51,6 +57,11 @@
     "check": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --experimental-strip-types --disable-warning=DEP0205 --import ./tests/register.mjs --test \"tests/*.test.ts\"",
-    "verify": "python3 scripts/verify.py startup"
+    "smoke": "node --experimental-strip-types --disable-warning=DEP0205 --import ./tests/register.mjs scripts/smoke.mjs",
+    "measure": "node --experimental-strip-types --disable-warning=DEP0205 --import ./tests/register.mjs scripts/measure.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.316",
+    "@modelcontextprotocol/sdk": "1.32.2"
   }
 }

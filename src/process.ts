@@ -9,7 +9,6 @@
  */
 
 import { ChildProcess, spawn, spawnSync } from "node:child_process";
-export { stableChildCwd } from "./child-cwd.js";
 
 import {
   cancelledError,

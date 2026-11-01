@@ -4,7 +4,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import createExtension from "../extensions/claude-directsdk/index.ts";
 import { PROVIDER_ID } from "../src/models.ts";
 
-/** The routing line Anthropic's server treats as a third-party app fingerprint. */
+/** The routing block Anthropic reads as another agent harness. */
 const PI_DOCS = [
   "Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):",
   "- When asked about: custom providers (docs/custom-provider.md), adding models (docs/models.md), pi packages (docs/packages.md)",

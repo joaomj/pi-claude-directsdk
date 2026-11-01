@@ -1,13 +1,14 @@
-/** Claude CLI supplies authentication; Pi owns the transcript and tools. */
+/** Claude Code supplies authentication and the model; Pi owns the transcript and tools. */
 import { normalizeContext, registerApiProvider, unregisterApiProviders } from "@earendil-works/pi-ai/compat";
 import type { SimpleStreamOptions } from "@earendil-works/pi-ai/compat";
 import { getDocsPath, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createDirectSdkProvider, PROVIDER_ID, streamSimple } from "../../src/provider.js";
+import { closeAllSessions } from "../../src/sdk/stream.js";
 
 /**
- * Pi's default prompt routes the model to Pi's docs by name. Anthropic rejects that
- * prompt as third-party app usage when the child reports a client label other than
- * Claude Code's SDK default, so this provider sends a plain pointer instead.
+ * Pi's prompt routes the model to Pi's docs by filename. Anthropic reads that
+ * routing as another agent harness and rejects the request as third-party app
+ * usage, so this provider sends a plain pointer instead.
  */
 const DOCS_SECTION =
   `Pi's own documentation is in ${getDocsPath()}. ` +
@@ -26,7 +27,7 @@ export default function (pi: ExtensionAPI) {
     stream: (model, context, options) => streamSimple(model, normalizeContext(context), options as SimpleStreamOptions),
     streamSimple: (model, context, options) => streamSimple(model, normalizeContext(context), options),
   }, PROVIDER_ID);
-  // Only this transport reports a custom client label, so other providers keep Pi's prompt.
+  // Only this provider sends Pi's prompt to Anthropic, so other providers keep it.
   pi.on("before_agent_start", (event, ctx) => {
     if (ctx.model?.provider !== PROVIDER_ID) return;
     const options = event.systemPromptOptions;
@@ -34,6 +35,10 @@ export default function (pi: ExtensionAPI) {
     if (options.customPrompt || options.forceSystemPrompt) return;
     options.sections.docs = DOCS_SECTION;
   });
-  pi.on("session_shutdown", () => { unregisterApiProviders(PROVIDER_ID); });
+  pi.on("session_shutdown", () => {
+    // No Claude Code process outlives the Pi session that started it.
+    closeAllSessions();
+    unregisterApiProviders(PROVIDER_ID);
+  });
   pi.registerProvider(createDirectSdkProvider(message => report(message)));
 }

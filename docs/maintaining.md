@@ -2,6 +2,8 @@
 
 ## Triage issues
 
+Ask for the error text and, when the report is about a failed turn, the matching line from the failure log described in [troubleshooting.md](troubleshooting.md#finding-what-failed). It carries the CLI version, the Claude session id, the CLI's stderr tail, and the upstream request id, which is what an Anthropic support request needs.
+
 Use these issue searches:
 
 - New reports: `is:issue is:open label:needs-triage`
@@ -27,28 +29,40 @@ See [contribution guidance](../CONTRIBUTING.md) for the reporter-facing policy.
 Public contributions are issue-only. If an unsolicited pull request arrives, explain that policy and close it.
 Maintainer pull requests remain available for branch review and CI.
 
-## Watch the upstream tracker
+## Watch the upstream SDK and CLI
 
-`.github/workflows/upstream-watch.yml` runs daily and appends upstream
-[anthropics/claude-code](https://github.com/anthropics/claude-code) issues to a single
-`Upstream Claude Code watch` issue. It looks for two kinds of report:
+The transport reads SDK message shapes, SDK options, and the `system/init` and
+`result` frames of Claude Code. Two dependencies therefore need a deliberate
+update instead of a floating range:
 
-- A literal identifier this transport writes or reads: the billing identity label, the
-  `CLAUDE_CODE_*` variables the child receives, `isUsingOverage`, or `unifiedWindows`.
-- A report about the SDK, `claude -p`, or headless use that also discusses metering. Reports
-  about the desktop app, VS Code, Cowork, and other clients stay out of this group.
+- `@anthropic-ai/claude-agent-sdk` is pinned to an exact version in `package.json`.
+- `@modelcontextprotocol/sdk` is pinned to the version whose handler signatures
+  the transport satisfies.
 
-Search hits are only a recall step, because GitHub search treats hyphens and underscores as
-word breaks. Relevance is decided on the raw issue text. The tracker issue body holds the last
-scan date and the numbers already reported, so a rerun never repeats an item, and that issue
-doubles as the archive. Deleting the state marker stops the job rather than duplicating the
-archive.
+Before you raise either pin, read the upstream changelog for changes to options,
+message types, or the MCP server API, then run:
 
-The same job reports when the published `@anthropic-ai/claude-code` version leaves
-`QUALIFIED_CLI_RANGE`. That is the signal to repeat the verification in [testing.md](testing.md).
+```sh
+npm run check
+npm test
+npm run smoke      # two real model calls on the maintainer login
+npm run measure cancellation   # token, cache, and process accounting
+```
 
-Run the workflow manually from the Actions tab to preview a report with `dry_run`. Set
-`lookback_days` to widen the window, which applies only while no previous report exists.
+`npm run smoke` is the check that catches a breaking frame change: it fails when
+the tool call does not come back to Pi or the session does not continue.
+`npm run measure cancellation` is the check that catches a lifecycle change: it
+fails when a cancelled turn is not `aborted`, when a parked session does not
+close, or when a `claude` process survives. Also repeat the two-tool Pi run in
+[testing.md](testing.md#full-pi-run) after a Claude Code update, because the CLI,
+not the SDK alone, produces the frames. Record the before and after values in the
+commit message when a measured number moves.
+
+`upstream-watch.yml` still scans the upstream tracker daily and reports new
+items on the tracking issue. Two things changed with the Agent SDK transport:
+its CLI range check no longer gates a version range, because the transport runs
+whatever Claude Code is installed, and its links go through
+`redirect.github.com`, so a report adds no backlink to the upstream issue.
 
 ## Develop on branches
 
@@ -81,6 +95,7 @@ Generated notes remain part of releases only; there is no per-commit changelog a
 ## Security and dependencies
 
 Dependabot vulnerability alerts remain enabled. Automatic security-update and version-update pull requests are disabled.
+The Agent SDK and MCP dependencies are pinned exactly and updated by hand, because their message shapes are part of this transport's contract.
 Review alerts in GitHub's Security tab and update affected dependencies on a maintenance branch.
 Review CodeQL and secret-scanning alerts there as well. See the [security policy](../SECURITY.md) for private reports.
 
