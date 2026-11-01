@@ -53,8 +53,8 @@ the tool call does not come back to Pi or the session does not continue.
 fails when a cancelled turn is not `aborted`, when a parked session does not
 close, or when a `claude` process survives. Also repeat the two-tool Pi run in
 [testing.md](testing.md#full-pi-run) after a Claude Code update, because the CLI,
-not the SDK alone, produces the frames. Record what changed in
-[measurements.md](measurements.md) when a number moves.
+not the SDK alone, produces the frames. Record the before and after values in the
+commit message when a measured number moves.
 
 The former `upstream-watch.yml` workflow and its CLI range check were removed
 with the direct-CLI transport. Watching upstream issues for identifier changes

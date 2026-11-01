@@ -49,7 +49,7 @@ Turns that received rate-limit information also carry a `pi-claude-directsdk/rat
 
 Token counters come from Claude Code and are per turn. A tool round trip does not double count them, because each Pi model call reads one assistant step.
 
-Caching depends on prompt size. Measured: no cache reads or writes at about 3,500 prompt tokens, and 98.8 to 98.9 percent cache-read share on continued turns at about 12,400. A rebuilt session still reuses the unchanged instruction prefix. See [Measurements](measurements.md).
+Caching depends on prompt size. Measured: no cache reads or writes at about 3,500 prompt tokens, and 98.8 to 98.9 percent cache-read share on continued turns at about 12,400. A rebuilt session still reuses the unchanged instruction prefix.
 
 See [docs/troubleshooting.md](troubleshooting.md) for login and environment errors.
 
@@ -73,7 +73,7 @@ Claude Code reports a client label with every request, and subscription usage is
 
 DirectSDK does not set that label. The Agent SDK starts the process and supplies it, so the previous custom `pi-claude-directsdk` label is gone.
 
-The quota figure Claude Code reports is not a running total. Measured here, it read 98 percent used and later 76 percent used inside the same window while work was only being added, and the same workload charged 4 points once and 1 point the next time. So no per-token quota cost can be derived from it, and the dollar cost estimate must not be read as plan consumption. Cached input is not free in the window, though: 123,560 cached tokens moved the figure as much as 62,000 uncached ones. See [Measurements](measurements.md).
+The quota figure Claude Code reports is not a running total. Measured here, it read 98 percent used and later 76 percent used inside the same window while work was only being added, and the same workload charged 4 points once and 1 point the next time. So no per-token quota cost can be derived from it, and the dollar cost estimate must not be read as plan consumption. Cached input is not free in the window, though: 123,560 cached tokens moved the figure as much as 62,000 uncached ones.
 
 The usage-credit guard below is the backstop if Anthropic classifies these requests as third-party traffic. It stops later turns, but not the first charged one.
 

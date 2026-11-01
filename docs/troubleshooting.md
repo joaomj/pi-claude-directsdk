@@ -37,7 +37,7 @@ Follow the [upgrade instructions](../README.md#upgrade), restart Pi, then open `
 
 The session, not the request, carries the history: a tool round trip or a follow-up message continues the same Claude Code process, so the prompt prefix and its cache stay in place. Measured on the real binary, continued turns read 98.8 to 98.9 percent of their prompt from cache.
 
-Prompt caching has a size threshold. Below roughly 4,000 prompt tokens, Claude Code reports no cache reads and no cache writes, so every turn pays full input price for the whole prompt. A conversation that short is still cheaper than vanilla `claude -p`, which sends a 20k prompt of its own. See [Measurements](measurements.md).
+Prompt caching has a size threshold. Below roughly 4,000 prompt tokens, Claude Code reports no cache reads and no cache writes, so every turn pays full input price for the whole prompt. A conversation that short is still cheaper than vanilla `claude -p`, which sends a 20k prompt of its own.
 
 A rebuilt session is not a cold prefix: the unchanged instructions still match the cache, and only the conversation tail is rewritten (94.9 percent of cached tokens reused in the same measurement). Changed prompts or tools, model switches, and cache expiry do start a new prefix.
 

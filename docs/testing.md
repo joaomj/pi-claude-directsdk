@@ -18,7 +18,7 @@ The suite uses `node:test` and needs no credentials. A scripted runtime stands i
 - An offered tool denied by Claude Code, a Pi tool server that failed to connect, a tool Pi never offered, an overage charge refused and allowed, a reply that merely mentions billing, and a silent CLI.
 - A signature-only thinking block dropped from the published message.
 
-The suite proves Pi-facing behaviour. It does not prove real generation, real CLI acceptance, or real cache reuse; [Measurements](measurements.md) covers those on the real binary.
+The suite proves Pi-facing behaviour. It does not prove real generation, real CLI acceptance, or real cache reuse; the real round trip and the full Pi run below cover those on the real binary.
 
 ```sh
 npm run check   # types, including the tests

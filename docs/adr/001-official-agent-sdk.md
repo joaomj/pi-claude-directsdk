@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted and implemented on `feat/official-agent-sdk`: transport, offline suite, real round trip, and [measurements](../measurements.md). Not release-qualified.
+Accepted and implemented on `feat/official-agent-sdk`: transport, offline suite, and real round trip. Not release-qualified.
 
 ## Context
 
@@ -80,7 +80,7 @@ Would hand native tools or workflow control to Claude Code. Rejected because the
 
 ## Qualification and follow-up
 
-The migration's acceptance criteria still govern release. Session recovery, supported versions, installation behavior, configuration migration, and the usage-credit signals are settled by tests and by [Measurements](../measurements.md). Unverified: cache lifetime beyond the 28-minute gap measured, conversations longer than six turns, Windows, and compiled Pi.
+The migration's acceptance criteria still govern release. Session recovery, supported versions, installation behavior, configuration migration, and the usage-credit signals are settled by tests. Unverified: cache lifetime beyond the 28-minute gap measured, conversations longer than six turns, Windows, and compiled Pi.
 
 Exact replay, exclusive ownership of Pi's prompt, and one request per Pi model call were requirements of the retired transport. They no longer gate this one.
 
