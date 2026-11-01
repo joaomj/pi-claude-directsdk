@@ -14,8 +14,6 @@ Those constraints require maintenance beyond the desired product outcome. They a
 
 OpenCode v2.2.3 demonstrates a different boundary. It uses the official SDK with the user's Claude executable, appends host instructions to Claude Code's base prompt, disables native tools, and sends host tool results through SDK MCP handlers.
 
-User-facing requirements and source references came from the PRD that scoped this migration; it is a working document and is not part of this repository.
-
 ## Decision
 
 Use `@anthropic-ai/claude-agent-sdk` as the supported transport. Run the user's installed, logged-in Claude Code executable through the SDK.
@@ -84,6 +82,6 @@ Would hand native tools or workflow control to Claude Code. Rejected because the
 
 The migration's acceptance criteria still govern release. Session recovery, supported versions, installation behavior, configuration migration, and the usage-credit signals are settled by tests and by [Measurements](../measurements.md). Unverified: cache lifetime beyond the 28-minute gap measured, conversations longer than six turns, Windows, and compiled Pi.
 
-The existing README and architecture describe the shipped implementation until migration lands. The old roadmap's requirement to preserve exact replay, exclusive Pi prompt ownership, and one-request admission no longer gates this migration.
+Exact replay, exclusive ownership of Pi's prompt, and one request per Pi model call were requirements of the retired transport. They no longer gate this one.
 
 Revisit the integration design if qualification shows that native tools cannot remain disabled, Pi permission decisions can be bypassed, or normal Pi conversation actions cannot retain usable task context. Do not restore discarded transport guarantees solely because the previous implementation had them.

@@ -54,6 +54,8 @@ Every session starts with:
 - `autoMemoryEnabled: false` and `autoDreamEnabled: false`.
 - `allowedTools` listing exactly the offered host tools. Under `dontAsk`, Claude Code denies an MCP tool that is not listed, so listing them is what lets the call reach Pi's handler, where Pi decides.
 
+Pi's `<docs>` section reaches the child as a short pointer to Pi's documentation directory, not as Pi's list of documentation files. The extension swaps that section in `before_agent_start` while a DirectSDK model is active, because Anthropic refuses a request whose system prompt lists another agent harness's documentation. Other providers keep Pi's prompt, and a custom or forced prompt keeps its own sections. See [Usage](usage.md).
+
 Sampling controls from Pi options (`temperature`, `top_p`) are not sent; subscription routes reject them. A thinking level reaches Claude Code as an effort level only when the model's catalog metadata maps it to one of `low`, `medium`, `high`, `xhigh`, or `max`.
 
 ### Session reuse and rebuild (`src/sdk/stream.ts`, `src/sdk/checkpoint.ts`)

@@ -66,7 +66,18 @@ Subscription mode refuses conflicting native auth and backend overrides in the m
 
 Claude Code can report that a response used pay-as-you-go usage credits instead of plan limits. DirectSDK stops the turn with a `billing` error unless `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` is set. The error names the reported status and reset time. The guard runs after the response and usage are captured, so it cannot undo the charge for that turn.
 
-Upstream rejections that mention third-party usage, extra usage, or usage credits produce the same error. Pi's retry classifier treats the message as non-retryable. To stay on plan limits only, disable usage credits in the Claude account settings and leave the override unset. Do not set the override just to silence the error.
+Two different upstream rejections arrive with this wording, and they need different fixes.
+
+- The request itself was refused because Anthropic classified it as third-party app usage:
+
+  ```
+  API Error: 400 Third-party apps now draw from your extra usage, not your plan limits.
+  ```
+
+  The prompt causes this one. Pi's `<docs>` section lists Pi's documentation files, and the extension replaces that section with a pointer before the request leaves Pi. If the message appears, that substitution did not happen: an older copy of the extension is loaded, or a second source registers the same provider. Run `npm test` in the checkout, where `tests/extension-prompt.test.ts` covers it, and run `pi list` to look for another `directsdk` source.
+- The turn completed and reported usage credits. That is the guard above, and the account setting is the fix.
+
+Neither case is retried. Setting `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` does not make a refused request pass; it only lets a completed turn that reports usage credits finish. To stay on plan limits, keep usage credits disabled in the Claude account settings.
 
 Completed and failed turns carry a `pi-claude-directsdk/rate-limit` diagnostic when Claude Code reported rate-limit status.
 
