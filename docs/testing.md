@@ -49,6 +49,8 @@ pi -e ./extensions/claude-directsdk/index.ts -p --no-session \
 
 This exercises Pi's own tool loop, approvals, and transcript against the transport. A pass with two tools shows that Pi executed two tool calls in one turn on one live Claude session.
 
+It is also the only check that proves prompt acceptance. Anthropic refuses an SDK-labelled request whose system prompt lists another agent harness's documentation, and a short prompt hides that: a one-line prompt was accepted while Pi's real prompt was refused six times out of six. Run this command, not a greeting, after a Pi or Claude Code update, and check that no new file appears under `~/.claude/projects` (`find ~/.claude/projects -name "*.jsonl" -newermt "-2 minutes"`), which would mean something other than this transport answered. See [Usage](usage.md).
+
 Use `pi install ./` instead of `-e` to keep the checkout loaded across invocations. Neither form publishes a release or changes the package version.
 
 ## Verified environments

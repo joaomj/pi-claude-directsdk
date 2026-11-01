@@ -53,6 +53,20 @@ Caching depends on prompt size. Measured: no cache reads or writes at about 3,50
 
 See [docs/troubleshooting.md](troubleshooting.md) for login and environment errors.
 
+## Prompt acceptance and plan billing
+
+Claude Code labels every request with a client label. This transport runs the user's Claude Code through the Agent SDK, so the label is the SDK's own, and Anthropic applies its third-party app rules to that label. A request whose system prompt lists another agent harness's documentation is refused:
+
+```
+API Error: 400 Third-party apps now draw from your extra usage, not your plan limits.
+```
+
+Pi's default `<docs>` section names Pi's documentation files, so it is refused. Measured: 6 of 6 requests refused with the section, accepted with the section replaced by a pointer to the same directory.
+
+While a DirectSDK model is active the extension replaces that section with a one-line pointer. Other providers keep Pi's prompt, and a custom or forced prompt is left alone because it has no Pi sections to change.
+
+The accepted wording is undocumented and can change. After a Pi or Claude Code update, send one real turn from an interactive session; a short prompt does not test this, because it is accepted even when Pi's full prompt is refused. See [Testing](testing.md).
+
 ## Plan usage metering
 
 Claude Code reports a client label with every request, and subscription usage is metered against that label. Headless SDK sessions have been reported to consume the 5-hour window roughly 1.6 to 2.9 times faster per token than the interactive CLI for the same work; see [anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074) for the measurements and for Anthropic's silence on whether the difference is intended.

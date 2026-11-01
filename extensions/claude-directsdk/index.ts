@@ -1,9 +1,18 @@
 /** Claude Code supplies authentication and the model; Pi owns the transcript and tools. */
 import { normalizeContext, registerApiProvider, unregisterApiProviders } from "@earendil-works/pi-ai/compat";
 import type { SimpleStreamOptions } from "@earendil-works/pi-ai/compat";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getDocsPath, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createDirectSdkProvider, PROVIDER_ID, streamSimple } from "../../src/provider.js";
 import { closeAllSessions } from "../../src/sdk/stream.js";
+
+/**
+ * Pi's prompt routes the model to Pi's docs by filename. Anthropic reads that
+ * routing as another agent harness and rejects the request as third-party app
+ * usage, so this provider sends a plain pointer instead.
+ */
+const DOCS_SECTION =
+  `Pi's own documentation is in ${getDocsPath()}. ` +
+  "Read the relevant file there only when the user asks about Pi itself, and follow its cross-references.";
 
 export default function (pi: ExtensionAPI) {
   let report = (message: string): void => { console.error(message); };
@@ -18,6 +27,14 @@ export default function (pi: ExtensionAPI) {
     stream: (model, context, options) => streamSimple(model, normalizeContext(context), options as SimpleStreamOptions),
     streamSimple: (model, context, options) => streamSimple(model, normalizeContext(context), options),
   }, PROVIDER_ID);
+  // Only this provider sends Pi's prompt to Anthropic, so other providers keep it.
+  pi.on("before_agent_start", (event, ctx) => {
+    if (ctx.model?.provider !== PROVIDER_ID) return;
+    const options = event.systemPromptOptions;
+    // A custom or forced prompt replaces Pi's sections; there is no docs section to swap.
+    if (options.customPrompt || options.forceSystemPrompt) return;
+    options.sections.docs = DOCS_SECTION;
+  });
   pi.on("session_shutdown", () => {
     // No Claude Code process outlives the Pi session that started it.
     closeAllSessions();
