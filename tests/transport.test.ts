@@ -83,6 +83,7 @@ function call(
     timeoutMs?: number;
     signal?: AbortSignal;
     sessionId?: string;
+    reasoning?: string;
   } = {},
 ): AssistantMessageEventStream {
   return streamClaudeDirectSdk(
@@ -93,6 +94,7 @@ function call(
       sessionId: options.sessionId ?? "conversation",
       env: { [TEST_UPSTREAM_ENV]: "1", [LOG_ENV]: "", ...options.env },
       ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.reasoning ? { reasoning: options.reasoning } : {}),
     } as never,
     deps,
   );
@@ -326,34 +328,98 @@ test("a rebuilt session keeps completed tool results instead of re-running them"
   assert.match(prompt, /Continue the task/);
 });
 
-test("a cancelled turn settles the parked tool call and drops the session", async () => {
+function abortedStep(): unknown {
+  return { role: "assistant", content: [], stopReason: "aborted", timestamp: 5 };
+}
+
+test("a cancelled tool call is answered as not run, and the next message reuses the session", async () => {
   const { fake, deps } = harness();
+  const tools = [readTool()];
   const controller = new AbortController();
-  const events = collect(call(deps, [userText("read a.txt")], {
-    tools: [readTool()],
-    signal: controller.signal,
-  }));
+  const events = collect(call(deps, [userText("read a.txt")], { tools, signal: controller.signal }));
   const query = await fake.nextQuery();
   await query.waitForUsers(1);
   query.emit(...toolStep([{ id: "toolu_1", name: "mcp__pi__read", input: { path: "a.txt" } }]));
   const step = final(await events);
   assert.equal(step.stopReason, "toolUse");
 
-  const pending = fake.toolServer.dispatch("read", { path: "a.txt" }, "toolu_1");
-  const interrupted = collect(call(deps, [userText("read a.txt"), step], {
-    tools: [readTool()],
-    signal: controller.signal,
-  }));
-  // Cancelling before Pi produced the result: the handler must not hang and the
+  // The user cancels while the tool runs: the handler must not hang and the
   // tool must not run.
+  const pending = fake.toolServer.dispatch("read", { path: "a.txt" }, "toolu_1");
   controller.abort();
+  const cancelledResult = { ...toolResult("toolu_1", "read", "Operation aborted"), isError: true };
+  const history = [userText("read a.txt"), step, cancelledResult];
+  const aborted = final(await collect(call(deps, history, { tools, signal: controller.signal })));
+  assert.equal(aborted.stopReason, "aborted");
   const settled = (await pending) as { content: Array<{ text: string }>; isError: boolean };
   assert.equal(settled.isError, true);
   assert.match(settled.content[0]?.text ?? "", /did not run/);
 
-  const aborted = final(await interrupted);
-  assert.equal(aborted.stopReason, "aborted");
-  assert.equal(deps.sessions.size, 0);
+  // Re-caching the conversation costs more than the turn did: the next message
+  // goes to the same Claude Code process.
+  const next = collect(call(deps, [...history, abortedStep(), userText("read b.txt instead")], { tools }));
+  await query.waitForUsers(2);
+  query.emit(...textStep("reading b"));
+  assert.equal(final(await next).stopReason, "stop");
+  assert.equal(fake.queries.length, 1);
+  assert.equal(query.users[1], "read b.txt instead");
+});
+
+test("a turn cancelled while the model writes keeps the session for the next message", async () => {
+  const { fake, deps } = harness();
+  const controller = new AbortController();
+  const events = collect(call(deps, [userText("write an essay")], { signal: controller.signal }));
+  const query = await fake.nextQuery();
+  await query.waitForUsers(1);
+  controller.abort();
+  assert.equal(final(await events).stopReason, "aborted");
+  assert.equal(query.interrupted, true);
+
+  const next = collect(call(deps, [userText("write an essay"), abortedStep(), userText("just one line")]));
+  await query.waitForUsers(2);
+  query.emit(...textStep("one line"));
+  assert.equal(final(await next).stopReason, "stop");
+  assert.equal(fake.queries.length, 1);
+  assert.equal(query.closed, false);
+});
+
+test("a message sent while a tool runs travels with the tool result, in the same session", async () => {
+  const { fake, deps } = harness();
+  const tools = [readTool()];
+  const first = collect(call(deps, [userText("read a.txt")], { tools }));
+  const query = await fake.nextQuery();
+  await query.waitForUsers(1);
+  query.emit(...toolStep([{ id: "toolu_1", name: "mcp__pi__read", input: { path: "a.txt" } }]));
+  const step = final(await first);
+
+  const pending = fake.toolServer.dispatch("read", { path: "a.txt" }, "toolu_1");
+  const history = [userText("read a.txt"), step, toolResult("toolu_1", "read", "file body"), userText("also commit it", 4)];
+  const second = collect(call(deps, history, { tools }));
+  const delivered = (await pending) as { content: Array<{ text: string }> };
+  const texts = delivered.content.map((block) => block.text);
+  assert.equal(texts[0], "file body");
+  assert.ok(texts.includes("also commit it"), `steering text missing from ${JSON.stringify(texts)}`);
+
+  query.emit(...textStep("read and committed"));
+  assert.equal(final(await second).stopReason, "stop");
+  assert.equal(fake.queries.length, 1);
+  assert.equal(query.users.length, 1);
+});
+
+test("a thinking-level change applies to the live session instead of rebuilding it", async () => {
+  const { fake, deps } = harness();
+  const first = collect(call(deps, [userText("hello")]));
+  const query = await fake.nextQuery();
+  await query.waitForUsers(1);
+  query.emit(...textStep("hi there"));
+  const step = final(await first);
+
+  const second = collect(call(deps, [userText("hello"), step, userText("think harder", 4)], { reasoning: "high" }));
+  await query.waitForUsers(2);
+  query.emit(...textStep("thought harder"));
+  assert.equal(final(await second).stopReason, "stop");
+  assert.equal(fake.queries.length, 1);
+  assert.deepEqual(query.efforts, ["high"]);
 });
 
 test("a turn fails when Claude Code denies a tool Pi offered", async () => {

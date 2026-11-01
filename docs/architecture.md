@@ -43,15 +43,21 @@ Pi's model call ends at `message_stop`, not at the end of the Claude turn. Pi ru
 A session is reused only when it still describes what Pi shows the user. All of these must hold:
 
 - A session exists for this Pi session id.
-- The native model, the effort, the appended prompt, and the offered tool names are unchanged.
+- The native model, the appended prompt, and the offered tool names are unchanged.
 - The digest of the messages the session already saw is unchanged.
-- What follows that prefix is either every parked tool result, or exactly one user message.
+- What follows that prefix, ignoring Pi's placeholders for aborted steps, is either every parked tool result followed by any user messages, or one or more user messages.
 
 Anything else drops the session and rebuilds it from checkpoint text.
 
+Every rebuild writes the conversation to the prompt cache again; only the system prompt and tools stay cached. On a subscription that cost lands on the plan window, so three common events keep the live session instead:
+
+- A thinking-level change is sent to the live session with `applyFlagSettings({ effortLevel })`. The API still re-caches the whole prompt after an effort change (measured: 0 tokens read, 5,842 written, on the next step), but Claude Code keeps its own record of the conversation instead of a plain-text checkpoint.
+- A user message sent while tools run (Pi steering) is appended to the last tool result, as Claude Code does with its own queued input. A separate user message would start a new Claude Code turn that no Pi call reads.
+- A cancelled step interrupts the turn but keeps the process. Claude Code ends the turn with an `error_during_execution` result and keeps the conversation, so the next step reads the cached prefix.
+
 An edit, a branch, a resume, or a compaction changes the digest, so the next call rebuilds. The checkpoint is text: earlier turns, the assistant's tool calls, and every completed tool result. A rebuild therefore never re-runs a completed operation and never pretends the new session saw the old one.
 
-A failed or cancelled call drops the session, because its state after the failure is unknown. Pi's history stays the authority.
+A failed call drops the session, because its state after the failure is unknown. Pi's history stays the authority.
 
 ## Components
 
@@ -97,7 +103,7 @@ Every session starts with `tools: []`, so Claude Code has no native tool; `setti
 
 `ClaudeSession` owns one streaming-input `query()`. Pi messages arrive through a bounded input generator; SDK frames arrive through a bounded channel with a deadline per frame. The pump records `system/init` — session id, CLI version, MCP server status — before forwarding frames.
 
-A frame deadline limits one phase, not the whole turn. Cancellation asks the query to interrupt, waits a short grace period, then closes. Closing settles every parked tool handler, closes both channels, closes the query, and aborts the SDK controller, so no Claude Code process outlives the Pi conversation.
+A frame deadline limits one phase, not the whole turn. Cancellation asks the query to interrupt and answers parked tool handlers as not run. The next call waits until the interrupted turn's `result` frame has drained. When the interrupt is not acknowledged, or no `result` arrives within a short grace period, the session closes. Closing settles every parked tool handler, closes both channels, closes the query, and aborts the SDK controller, so no Claude Code process outlives the Pi conversation.
 
 ### Tool bridge
 

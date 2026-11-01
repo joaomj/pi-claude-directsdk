@@ -51,6 +51,7 @@ export class ClaudeSession {
   private readonly abortController = new AbortController();
   private query: Query | undefined;
   private stderrTail = "";
+  private interrupting: Promise<boolean> | undefined;
   private closed = false;
   private finished = false;
 
@@ -113,19 +114,56 @@ export class ClaudeSession {
     return this.stderrTail.slice(-maxChars);
   }
 
-  /** Ask Claude Code to stop the current turn, then drop the session. */
-  async interrupt(): Promise<void> {
-    const query = this.query;
-    if (!query || this.closed) {
-      this.close();
-      return;
+  /**
+   * Ask Claude Code to stop the current turn and keep the process. Claude Code
+   * ends the turn with a `result` frame and keeps its conversation, so the next
+   * turn still reads the cached prefix. Concurrent callers share one request.
+   * Resolves false, with the session closed, when the interrupt is not acknowledged.
+   */
+  interrupt(): Promise<boolean> {
+    this.interrupting ??= this.requestInterrupt();
+    return this.interrupting;
+  }
+
+  /** Change the reasoning effort of the live session; undefined restores the model default. */
+  async setEffort(effort: Effort | undefined): Promise<void> {
+    if (!this.query || this.closed) throw sdkError("the Claude session is closed");
+    await withDeadline(this.query.applyFlagSettings({ effortLevel: effort ?? null }), INTERRUPT_GRACE_MS);
+  }
+
+  /**
+   * Discard the frames of an interrupted turn up to its `result`. Parked tool
+   * calls are answered as not run, so Claude Code never waits on them.
+   * False when the turn did not end in time; the session is then closed.
+   */
+  async finishInterrupted(resultSeen: boolean): Promise<boolean> {
+    const acknowledged = await this.interrupt();
+    this.interrupting = undefined;
+    this.bridge.settleAll();
+    this.bridge.reset();
+    if (!acknowledged) return false;
+    while (!resultSeen) {
+      const frame = await this.frames.next(INTERRUPT_GRACE_MS).catch(() => null);
+      if (frame === null) {
+        this.close();
+        return false;
+      }
+      resultSeen = frame.type === "result";
     }
+    return !this.ended;
+  }
+
+  private async requestInterrupt(): Promise<boolean> {
+    const query = this.query;
+    if (!query || this.closed) return false;
     try {
       await withDeadline(query.interrupt(), INTERRUPT_GRACE_MS);
+      return true;
     } catch {
       // An interrupt that cannot be delivered is followed by a hard close.
+      this.close();
+      return false;
     }
-    this.close();
   }
 
   close(): void {

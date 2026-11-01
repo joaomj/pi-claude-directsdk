@@ -54,7 +54,7 @@ import { PROVIDER_ID, nativeModel } from "../models.js";
 import { resolveClaude } from "../setup.js";
 import { isRecord } from "../types.js";
 import { loadRuntime, type SdkRuntime } from "./adapter.js";
-import { toMcpResult, ToolBridge } from "./bridge.js";
+import { toMcpResult, ToolBridge, type McpContent } from "./bridge.js";
 import { checkpointPrompt, checkpointText } from "./checkpoint.js";
 import { toEffort, type Effort } from "./options.js";
 import { ClaudeSession } from "./session.js";
@@ -81,6 +81,8 @@ export interface ManagedSession {
   historyLength: number;
   /** Digest of those messages: any edit makes the session unusable. */
   historyDigest: string;
+  /** Pending while an interrupted turn drains; the next call waits for it. */
+  ready?: Promise<void> | undefined;
 }
 
 /** Live sessions, keyed by the Pi conversation they belong to. */
@@ -254,12 +256,11 @@ function nonSystem(messages: Message[]): Message[] {
   return messages.filter((message) => message.role !== "system");
 }
 
-function trailingToolResults(messages: Message[]): ToolResultMessage[] {
+function leadingToolResults(messages: Message[]): ToolResultMessage[] {
   const results: ToolResultMessage[] = [];
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role !== "toolResult") break;
-    results.unshift(message);
+  for (const message of messages) {
+    if (message.role !== "toolResult") break;
+    results.push(message);
   }
   return results;
 }
@@ -267,6 +268,14 @@ function trailingToolResults(messages: Message[]): ToolResultMessage[] {
 function userContent(message: Message): string | Array<Record<string, unknown>> {
   if (message.role !== "user") return "";
   if (typeof message.content === "string") return message.content;
+  const blocks = userBlocks(message);
+  return blocks.length === 0 ? "" : blocks;
+}
+
+/** Anthropic content blocks of one Pi user message. */
+function userBlocks(message: Message): Array<Record<string, unknown>> {
+  if (message.role !== "user") return [];
+  if (typeof message.content === "string") return [{ type: "text", text: message.content }];
   const blocks: Array<Record<string, unknown>> = [];
   for (const block of message.content) {
     if (block.type === "text") {
@@ -278,7 +287,25 @@ function userContent(message: Message): string | Array<Record<string, unknown>> 
       });
     }
   }
-  return blocks.length === 0 ? "" : blocks;
+  return blocks;
+}
+
+/** MCP content for user messages that arrived while tools ran. */
+function steeringContent(messages: Message[]): McpContent[] {
+  const content: McpContent[] = [];
+  for (const message of messages) {
+    if (message.role !== "user") continue;
+    content.push({ type: "text", text: "The user sent this message while the tool ran:" });
+    if (typeof message.content === "string") {
+      content.push({ type: "text", text: message.content });
+      continue;
+    }
+    for (const block of message.content) {
+      if (block.type === "text") content.push({ type: "text", text: block.text });
+      else if (block.type === "image") content.push({ type: "image", data: block.data, mimeType: block.mimeType });
+    }
+  }
+  return content;
 }
 
 interface Progressive {
@@ -564,13 +591,14 @@ async function acquireSession(request: SessionRequest): Promise<Acquired> {
   const toolNames = specs.map((spec) => spec.name);
   const promptDigest = createHash("sha256").update(request.append).digest("hex");
   const existing = deps.sessions.get(key);
+  await existing?.ready;
 
-  if (existing && !existing.session.ended) {
+  if (existing && !existing.session.ended && deps.sessions.get(key) === existing) {
     const compatible =
       existing.model === request.nativeModelId &&
-      existing.effort === request.effort &&
       existing.promptDigest === promptDigest &&
-      sameNames(existing.toolNames, toolNames);
+      sameNames(existing.toolNames, toolNames) &&
+      (await applyEffort(existing, request.effort));
     if (compatible) {
       const continued = tryContinue(existing, messages);
       if (continued) return continued;
@@ -606,6 +634,28 @@ async function acquireSession(request: SessionRequest): Promise<Acquired> {
   return { managed, sent: true };
 }
 
+/**
+ * A thinking-level change is applied to the live session. The API ties the
+ * message cache to the thinking settings, so the conversation is cached once
+ * more either way, but a rebuild would also replace Claude's own record of the
+ * conversation with a plain-text checkpoint.
+ */
+async function applyEffort(existing: ManagedSession, effort: Effort | undefined): Promise<boolean> {
+  if (existing.effort === effort) return true;
+  try {
+    await existing.session.setEffort(effort);
+  } catch {
+    return false;
+  }
+  existing.effort = effort;
+  return true;
+}
+
+/**
+ * Continue the live session with what Pi added since the last step. Anything
+ * that would make Claude Code's record differ from Pi's returns null, and the
+ * caller rebuilds. Every case kept here avoids caching the conversation again.
+ */
 function tryContinue(existing: ManagedSession, messages: Message[]): Acquired | null {
   const known = messages.slice(0, existing.historyLength);
   // Resume, branch, edit, or compaction changed the record: the live session no
@@ -613,25 +663,55 @@ function tryContinue(existing: ManagedSession, messages: Message[]): Acquired | 
   if (known.length !== existing.historyLength || digestMessages(known) !== existing.historyDigest) {
     return null;
   }
-  const tail = messages.slice(existing.historyLength);
+  // An aborted step is Pi's placeholder; Claude Code already ended that turn.
+  const tail = messages
+    .slice(existing.historyLength)
+    .filter((message) => !(message.role === "assistant" && message.stopReason === "aborted"));
   if (existing.awaiting.length > 0) {
-    const results = trailingToolResults(tail);
-    if (results.length !== tail.length) return null;
+    const results = leadingToolResults(tail);
+    const steering = tail.slice(results.length);
+    if (steering.some((message) => message.role !== "user")) return null;
     const ids = results.map((result) => result.toolCallId);
     if (ids.length !== existing.awaiting.length) return null;
     if (!existing.awaiting.every((id) => ids.includes(id))) return null;
-    for (const result of results) {
-      if (!existing.session.bridge.deliver(result.toolCallId, toMcpResult(result))) {
+    for (const [index, result] of results.entries()) {
+      const delivered = toMcpResult(result);
+      // A message the user sent while the tools ran travels with the last
+      // result, as Claude Code does with its own queued input. A separate user
+      // message would need a new turn, and Pi would have no step to read it from.
+      if (index === results.length - 1) delivered.content.push(...steeringContent(steering));
+      if (!existing.session.bridge.deliver(result.toolCallId, delivered)) {
         return null;
       }
     }
     existing.awaiting = [];
     return { managed: existing, sent: false };
   }
-  const only = tail[0];
-  if (tail.length !== 1 || only?.role !== "user") return null;
-  existing.session.sendUser(userContent(only));
+  if (tail.length === 0 || tail.some((message) => message.role !== "user")) return null;
+  existing.session.sendUser(tail.length === 1 && tail[0] ? userContent(tail[0]) : tail.flatMap(userBlocks));
   return { managed: existing, sent: true };
+}
+
+/**
+ * Keep the session after a cancelled step. Claude Code ends the turn and keeps
+ * its record, which then holds everything Pi sent; Pi adds only its aborted
+ * placeholder. The next call waits until the interrupted turn has drained.
+ */
+function keepAfterAbort(
+  deps: CallDeps,
+  key: string,
+  managed: ManagedSession,
+  context: TranscriptContext,
+  resultSeen: boolean,
+): void {
+  const messages = nonSystem(context.messages);
+  managed.awaiting = [];
+  managed.historyLength = messages.length;
+  managed.historyDigest = digestMessages(messages);
+  managed.ready = managed.session.finishInterrupted(resultSeen).then((ok) => {
+    managed.ready = undefined;
+    if (!ok && deps.sessions.get(key) === managed) deps.sessions.drop(key);
+  });
 }
 
 async function executeCall(
@@ -661,6 +741,8 @@ async function executeCall(
   let logEnv: NodeJS.ProcessEnv = process.env;
   let abortListener: (() => void) | undefined;
   let timeoutMs = DEFAULT_TIMEOUT_MS;
+  /** True when the interrupted turn's `result` frame was already consumed. */
+  let resultSeenOnAbort = false;
 
   const diagnostic = (kind: string): AssistantMessageDiagnostic => ({
     type: kind,
@@ -702,6 +784,11 @@ async function executeCall(
   };
 
   if (options.signal?.aborted) {
+    // A session parked on tool calls is mid-turn; an idle one has nothing to stop.
+    const existing = deps.sessions.get(key);
+    if (existing && !existing.ready && existing.awaiting.length > 0 && !existing.session.ended) {
+      keepAfterAbort(deps, key, existing, context, false);
+    }
     fail(cancelledError());
     return;
   }
@@ -766,7 +853,10 @@ async function executeCall(
         if (options.signal?.aborted) throw cancelledError();
         throw error;
       });
-      if (options.signal?.aborted) throw cancelledError();
+      if (options.signal?.aborted) {
+        resultSeenOnAbort = frame?.type === "result";
+        throw cancelledError();
+      }
       if (frame === null) {
         throw incompleteError(
           `Claude Code ended the session before the step completed${session.stderr() ? `, stderr: ${session.stderr()}` : ""}`,
@@ -965,7 +1055,9 @@ async function executeCall(
     fail(error);
   } finally {
     if (abortListener) options.signal?.removeEventListener("abort", abortListener);
-    if (!keepSession) {
+    if (!keepSession && managed && options.signal?.aborted && !managed.session.ended) {
+      keepAfterAbort(deps, key, managed, context, resultSeenOnAbort);
+    } else if (!keepSession) {
       // The session state is unknown after a failure; Pi's history is rebuilt
       // from a checkpoint on the next call instead of being trusted.
       deps.sessions.drop(key);

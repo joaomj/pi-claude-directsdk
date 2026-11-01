@@ -21,7 +21,7 @@
 | A step ended without output or usage | `incomplete` | The session ended mid-step or returned no usage. Retry the request; the next call rebuilds the session from Pi's history. |
 | Truncated with no answer | `native` | The turn spent its whole output budget on thinking. Lower the thinking level or switch models, then retry. |
 | Request timed out | `timeout` | Retry the request. The default timeout is 180 seconds per step, not for the whole turn. |
-| Request cancelled | `cancelled` | Re-run the request. Cancel interrupts the session, settles any parked tool call without running it, and closes the process. |
+| Request cancelled | `cancelled` | Re-run the request. Cancel interrupts the turn and answers any parked tool call as not run. The Claude Code process stays alive, so the next message reuses its cache. |
 
 Missing CLI, logged-out CLI, and a failed SDK handshake fail before any upstream contact. The messages are actionable and safe to show.
 

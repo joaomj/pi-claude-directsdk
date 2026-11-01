@@ -14,7 +14,8 @@ The suite uses `node:test` and needs no credentials. A scripted runtime stands i
 - A tool call returned to Pi, the parked MCP handler, Pi's result delivered to that exact tool-use id, and the continuation on the same session without a second prompt.
 - Parallel tool calls answered with their own results.
 - A rebuild when an earlier message was rewritten, and a rebuild that keeps completed tool results instead of repeating them.
-- Cancellation settling the parked call and dropping the session.
+- Cancellation during a tool call or during generation: the parked call is answered as not run, and the next message continues the same Claude Code process.
+- A message sent while a tool runs, delivered with the tool result in the same session, and a thinking-level change applied to the live session instead of a rebuild.
 - An offered tool denied by Claude Code, a Pi tool server that failed to connect, a tool Pi never offered (Claude Code answers it, the turn continues, and four in one turn fail it), an overage charge refused and allowed, a reply that merely mentions billing, and a silent CLI.
 - The failure log: one JSON line per failed turn with kind, model, session, and message; the upstream request id on an API rejection; the default path, the override, and the disable value; and rotation at the cap. The suite points `CLAUDE_DIRECTSDK_LOG` at a temporary file, so it never writes the log of the machine it runs on.
 - A signature-only thinking block dropped from the published message.

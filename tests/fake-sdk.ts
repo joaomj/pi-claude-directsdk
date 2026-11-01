@@ -340,6 +340,8 @@ export class FakeQuery {
   readonly emitted: SDKMessage[] = [];
   interrupted = false;
   closed = false;
+  /** Effort levels applied to the live session, in order. */
+  readonly efforts: Array<string | null> = [];
 
   private readonly queue: SDKMessage[] = [];
   private readonly readers: Array<(value: SDKMessage | null) => void> = [];
@@ -376,9 +378,19 @@ export class FakeQuery {
     for (const waiter of this.userWaiters.splice(0)) waiter();
   }
 
+  /** Claude Code ends the running turn with an error result and keeps the process. */
   async interrupt(): Promise<void> {
     this.interrupted = true;
-    this.end();
+    this.emit({
+      type: "result",
+      subtype: "error_during_execution",
+      is_error: true,
+      session_id: "fake-session",
+    } as unknown as SDKMessage);
+  }
+
+  async applyFlagSettings(settings: { effortLevel?: string | null }): Promise<void> {
+    if ("effortLevel" in settings) this.efforts.push(settings.effortLevel ?? null);
   }
 
   close(): void {
