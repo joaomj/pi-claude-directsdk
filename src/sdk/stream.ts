@@ -770,7 +770,12 @@ async function executeCall(
         if (!isRecord(message)) continue;
         const errorCode = record["error"];
         if (typeof errorCode === "string" && errorCode) {
-          throw assistantFailure(errorCode, model);
+          // The CLI reports API failures it cannot classify as "unknown" and puts
+          // the provider's text in a synthetic assistant message. That text is
+          // the only explanation the user gets, so it becomes the error.
+          const apiText = record["is_api_error_message"] === true ? apiErrorText(message) : "";
+          if (apiText) throw sdkError(apiText);
+          throw assistantFailure(errorCode, model, session.stderr());
         }
         renderer.assistant(message);
         continue;
@@ -912,6 +917,16 @@ async function executeCall(
   }
 }
 
+/** Text of a synthetic API error message, which is the provider's own wording. */
+function apiErrorText(message: Record<string, unknown>): string {
+  const content = message["content"];
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((block) => (isRecord(block) && typeof block["text"] === "string" ? block["text"] : ""))
+    .join("")
+    .trim();
+}
+
 /** Claude Code must report the host tool server as connected. */
 function checkToolServer(servers: Array<{ name: string; status: string }>, specs: PiToolSpec[]): void {
   if (specs.length === 0) return;
@@ -924,7 +939,7 @@ function checkToolServer(servers: Array<{ name: string; status: string }>, specs
   }
 }
 
-function assistantFailure(code: string, model: Model<Api>): DirectSdkError {
+function assistantFailure(code: string, model: Model<Api>, stderr?: string): DirectSdkError {
   switch (code) {
     case "authentication_failed":
     case "oauth_org_not_allowed":
@@ -940,8 +955,12 @@ function assistantFailure(code: string, model: Model<Api>): DirectSdkError {
         "native",
         `Claude Code does not offer ${model.id} to this account. Pick another model from /model.`,
       );
-    default:
-      return sdkError(`Claude Code reported ${code}`);
+    default: {
+      // The CLI classifies what it cannot attribute as "unknown"; its stderr is
+      // often the only place the real reason appears.
+      const detail = stderr?.trim().slice(-400);
+      return sdkError(`Claude Code reported ${code}${detail ? `, stderr: ${detail}` : ""}`);
+    }
   }
 }
 
