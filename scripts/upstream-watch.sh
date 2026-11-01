@@ -184,7 +184,8 @@ emit_rows() { # $1 = matching rows of findings.tsv
   while IFS=$'\t' read -r number _tier tokens title; do
     (( ${#reported[@]} >= MAX_REPORTED )) && return 0
     (( ${#reported[@]} )) && [[ " ${reported[*]} " == *" $number "* ]] && continue
-    printf -- '- [#%s](https://github.com/%s/issues/%s) `%s` %s\n' \
+    # redirect.github.com links keep GitHub from posting a backlink on the upstream issue.
+    printf -- '- [#%s](https://redirect.github.com/%s/issues/%s) `%s` %s\n' \
       "$number" "$UPSTREAM_REPO" "$number" "$tokens" "$title"
     reported+=("$number")
   done <<<"$rows"
