@@ -58,9 +58,11 @@ close, or when a `claude` process survives. Also repeat the two-tool Pi run in
 not the SDK alone, produces the frames. Record the before and after values in the
 commit message when a measured number moves.
 
-The former `upstream-watch.yml` workflow and its CLI range check were removed
-with the direct-CLI transport. Watching upstream issues for identifier changes
-is still useful, but it no longer gates a version range.
+`upstream-watch.yml` still scans the upstream tracker daily and reports new
+items on the tracking issue. Two things changed with the Agent SDK transport:
+its CLI range check no longer gates a version range, because the transport runs
+whatever Claude Code is installed, and its links go through
+`redirect.github.com`, so a report adds no backlink to the upstream issue.
 
 ## Develop on branches
 
