@@ -2,6 +2,8 @@
 
 ## Triage issues
 
+Ask for the error text and, when the report is about a failed turn, the matching line from the failure log described in [troubleshooting.md](troubleshooting.md#finding-what-failed). It carries the CLI version, the Claude session id, the CLI's stderr tail, and the upstream request id, which is what an Anthropic support request needs.
+
 Use these issue searches:
 
 - New reports: `is:issue is:open label:needs-triage`

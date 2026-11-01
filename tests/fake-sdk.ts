@@ -315,6 +315,25 @@ export function overageFrame(): SDKMessage {
   } as unknown as SDKMessage;
 }
 
+/** An API rejection the CLI could not classify, with the id Anthropic support asks for. */
+export function apiErrorFrame(text: string, requestId = "req_abc123"): SDKMessage {
+  return {
+    type: "assistant",
+    error: "unknown",
+    is_api_error_message: true,
+    request_id: requestId,
+    session_id: "sess_fake",
+    message: {
+      id: "msg_error",
+      model: "<synthetic>",
+      role: "assistant",
+      stop_reason: "stop_sequence",
+      content: [{ type: "text", text }],
+      usage: USAGE,
+    },
+  } as unknown as SDKMessage;
+}
+
 /** The messages one test query received and the frames the test fed it. */
 export class FakeQuery {
   readonly users: string[] = [];

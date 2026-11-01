@@ -59,8 +59,12 @@ import { checkpointPrompt, checkpointText } from "./checkpoint.js";
 import { toEffort, type Effort } from "./options.js";
 import { ClaudeSession } from "./session.js";
 import { prepareToolSpecs, MCP_SERVER_NAME, TOOL_NAME_PREFIX, toolBareName, type PiToolSpec } from "./tools.js";
+import { logTransportEvent } from "./log.js";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
+
+/** How many unoffered calls one turn tolerates before it fails. */
+const MAX_UNOFFERED_CALLS = 3;
 const NATIVE_API = "claude-directsdk";
 const SESSION_DIAGNOSTIC = "pi-claude-directsdk/session";
 
@@ -653,6 +657,8 @@ async function executeCall(
   let latestRateLimit: RateLimitInfo | undefined;
   let nativeCostUsd = -1;
   let resultSubtype: string | undefined;
+  let requestId: string | undefined;
+  let logEnv: NodeJS.ProcessEnv = process.env;
   let abortListener: (() => void) | undefined;
   let timeoutMs = DEFAULT_TIMEOUT_MS;
 
@@ -675,6 +681,18 @@ async function executeCall(
     const aborted = error instanceof DirectSdkError && error.kind === "cancelled";
     output.stopReason = aborted ? "aborted" : "error";
     output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+    logTransportEvent({
+      kind: aborted ? "aborted" : (error instanceof DirectSdkError ? error.kind : "error"),
+      message: output.errorMessage,
+      model: model.id,
+      cliVersion: managed?.session.cliVersion,
+      claudeSessionId: managed?.session.sessionId,
+      mcpServers: managed?.session.mcpServers.map((server) => `${server.name}:${server.status}`),
+      requestId,
+      stderrTail: managed?.session.stderr(),
+      piSessionId: options.sessionId,
+      resultSubtype,
+    }, logEnv);
     output.diagnostics = [
       ...(latestRateLimit ? [rateLimitDiagnostic(latestRateLimit)] : []),
       diagnostic(SESSION_DIAGNOSTIC),
@@ -690,6 +708,7 @@ async function executeCall(
 
   try {
     const mergedEnv: NodeJS.ProcessEnv = { ...process.env, ...options.env };
+    logEnv = mergedEnv;
     const conflicts = checkEnvConflicts(mergedEnv);
     if (conflicts.length > 0) throw envConflictError(conflicts);
     timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -738,6 +757,7 @@ async function executeCall(
 
     const renderer = new Renderer(output, (event) => stream.push(event), session.bridge);
     let resultFrame: Record<string, unknown> | undefined;
+    let unofferedSeen = 0;
 
     for (;;) {
       if (options.signal?.aborted) throw cancelledError();
@@ -753,15 +773,27 @@ async function executeCall(
         );
       }
       const record = frame as unknown as Record<string, unknown>;
+      if (typeof record["request_id"] === "string" && record["request_id"]) requestId = record["request_id"];
       const type = typeof record["type"] === "string" ? record["type"] : "";
       if (type === "stream_event") {
         const event = record["event"];
         if (!isRecord(event)) continue;
         renderer.streamEvent(event);
         if (event["type"] === "message_stop" && renderer.stopReason === "tool_use") {
-          // The tool handler is already parked; the turn cannot finish until Pi
-          // executes the call, so this step ends here.
-          break;
+          // Only a call for an offered Pi tool parks here. Claude Code answers a
+          // call for a tool it does not have with an error result and keeps
+          // streaming, so Pi waits for the corrected step instead of failing.
+          const step = renderer.toolCalls();
+          if (step.some((call) => isOffered(call.name, specs))) break;
+          unofferedSeen += step.length;
+          if (unofferedSeen > MAX_UNOFFERED_CALLS) {
+            const names = [...new Set(step.map((call) => call.name || "(unnamed)"))].join(", ");
+            throw toolError(
+              `Claude called a tool Pi did not offer ${unofferedSeen} times in one turn: ${names}. ` +
+                "Pi never substitutes its own tool for an offered one. Retry the turn.",
+            );
+          }
+          continue;
         }
         continue;
       }
@@ -774,7 +806,7 @@ async function executeCall(
           // the provider's text in a synthetic assistant message. That text is
           // the only explanation the user gets, so it becomes the error.
           const apiText = record["is_api_error_message"] === true ? apiErrorText(message) : "";
-          if (apiText) throw sdkError(apiText);
+          if (apiText) throw sdkError(withRequestId(apiText, requestId));
           throw assistantFailure(errorCode, model, session.stderr());
         }
         renderer.assistant(message);
@@ -841,10 +873,14 @@ async function executeCall(
     );
 
     const toolCalls: ToolCall[] = [];
+    const unoffered: string[] = [];
     for (const [index, call] of calls.entries()) {
       const bare = toolBareName(call.name);
-      if (!bare || !specs.some((spec) => spec.name === bare)) {
-        throw toolError(`Claude called a tool Pi did not offer: ${call.name || "(unnamed)"}`);
+      if (bare === null || !isOffered(call.name, specs)) {
+        // Pi never runs a tool it did not offer. Claude Code answers the call
+        // itself, and the model usually corrects itself in the next step.
+        unoffered.push(call.name || "(unnamed)");
+        continue;
       }
       const parsed = parseToolInput(call.input);
       const toolCall: ToolCall = {
@@ -861,6 +897,26 @@ async function executeCall(
       if (final?.type === "toolCall") final.arguments = parsed;
       toolCalls.push(toolCall);
       stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
+    }
+
+    if (unoffered.length > 0) {
+      const names = [...new Set(unoffered)].join(", ");
+      logTransportEvent({
+        kind: "unoffered_tool",
+        message: `Claude called a tool Pi did not offer: ${names}`,
+        model: model.id,
+        cliVersion: session.cliVersion,
+        claudeSessionId: session.sessionId,
+        requestId,
+        stderrTail: session.stderr(),
+        piSessionId: options.sessionId,
+      }, logEnv);
+      if (unoffered.length > MAX_UNOFFERED_CALLS) {
+        throw toolError(
+          `Claude called a tool Pi did not offer ${unoffered.length} times in one turn: ${names}. ` +
+            "Pi never substitutes its own tool for an offered one. Retry the turn.",
+        );
+      }
     }
 
     output.usage = usage;
@@ -915,6 +971,17 @@ async function executeCall(
       deps.sessions.drop(key);
     }
   }
+}
+
+/** True when a reported tool name maps to a tool Pi offered this turn. */
+function isOffered(name: string, specs: PiToolSpec[]): boolean {
+  const bare = toolBareName(name);
+  return bare !== "" && specs.some((spec) => spec.name === bare);
+}
+
+/** Anthropic support asks for this id first; keep it next to the provider's text. */
+function withRequestId(text: string, requestId: string | undefined): string {
+  return requestId ? `${text} (request id ${requestId})` : text;
 }
 
 /** Text of a synthetic API error message, which is the provider's own wording. */

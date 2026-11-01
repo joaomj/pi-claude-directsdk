@@ -31,6 +31,7 @@ The Agent SDK and the MCP server load on the first Claude request. See [docs/sta
 | `CLAUDE_DIRECTSDK_CONFIG_DIR` | Point at a logged-in CLI config directory. Forwarded as `CLAUDE_CONFIG_DIR`. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Supply a token from `claude setup-token` in the environment Pi runs in. |
 | `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` | Set to `1` to allow turns that Claude Code reports as charged to usage credits. Unset or `0` stops later turns after an overage charge. |
+| `CLAUDE_DIRECTSDK_LOG` | Failure log path. Defaults to `~/.pi/agent/logs/claude-directsdk.jsonl`; empty or `off` disables it. |
 
 Conflicting auth and backend overrides are rejected before a session starts: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and `CLAUDE_CODE_USE_FOUNDRY`. See [troubleshooting.md](troubleshooting.md) for the error and its fix.
 

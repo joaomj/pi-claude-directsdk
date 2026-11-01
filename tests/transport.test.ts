@@ -7,6 +7,9 @@
  */
 
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, writeFileSync, statSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { isRetryableAssistantError, normalizeContext } from "@earendil-works/pi-ai/compat";
 import type {
@@ -19,10 +22,25 @@ import type {
 } from "@earendil-works/pi-ai/compat";
 import { ALLOW_USAGE_CREDITS_ENV } from "../src/billing.ts";
 import { TEST_UPSTREAM_ENV } from "../src/env.ts";
+import { LOG_ENV, logPath, logTransportEvent } from "../src/sdk/log.ts";
 import { SessionRegistry, streamClaudeDirectSdk, type CallDeps } from "../src/sdk/stream.ts";
-import { FakeClaude, model, overageFrame, reasoningStep, textStep, toolStep, USAGE } from "./fake-sdk.ts";
+import {
+  apiErrorFrame,
+  FakeClaude,
+  model,
+  overageFrame,
+  reasoningStep,
+  textStep,
+  toolStep,
+  USAGE,
+} from "./fake-sdk.ts";
 
 const PROMPT = "You are Pi. Answer with the host tools.";
+
+/** A log file no other test reads. */
+function tmpLog(name: string): string {
+  return join(mkdtempSync(join(tmpdir(), `directsdk-${name}-`)), "log.jsonl");
+}
 const SYSTEM_PROMPT = "Pi system prompt";
 
 function harness(): { fake: FakeClaude; deps: CallDeps } {
@@ -73,7 +91,7 @@ function call(
     {
       timeoutMs: options.timeoutMs ?? 2_000,
       sessionId: options.sessionId ?? "conversation",
-      env: { [TEST_UPSTREAM_ENV]: "1", ...options.env },
+      env: { [TEST_UPSTREAM_ENV]: "1", [LOG_ENV]: "", ...options.env },
       ...(options.signal ? { signal: options.signal } : {}),
     } as never,
     deps,
@@ -370,15 +388,36 @@ test("a turn fails when the Pi tool server is not connected", async () => {
   assert.match(message.errorMessage ?? "", /failed/);
 });
 
-test("a tool call Pi did not offer is refused, not executed", async () => {
+test("a tool Pi did not offer is never run, and Claude Code corrects itself", async () => {
+  const log = tmpLog("unoffered");
+  const { fake, deps } = harness();
+  const events = collect(call(deps, [userText("list files")], { tools: [readTool()], env: { [LOG_ENV]: log } }));
+  const query = await fake.nextQuery();
+  await query.waitForUsers(1);
+  // The model asks for a native tool Claude Code no longer has; Claude Code
+  // answers that call itself and streams the corrected step.
+  query.emit(...toolStep([{ id: "toolu_x", name: "Bash", input: { command: "ls" } }]));
+  query.emit(...textStep("I will read the file instead."));
+
+  const message = final(await events);
+  assert.equal(message.stopReason, "stop");
+  assert.equal(message.content.some((block) => block.type === "toolCall"), false);
+  const line = JSON.parse(readFileSync(log, "utf8").trim());
+  assert.equal(line.kind, "unoffered_tool");
+  assert.match(line.message, /did not offer: Bash/);
+});
+
+test("a turn fails when the model keeps asking for tools Pi does not offer", async () => {
   const { fake, deps } = harness();
   const events = collect(call(deps, [userText("list files")], { tools: [readTool()] }));
   const query = await fake.nextQuery();
   await query.waitForUsers(1);
-  query.emit(...toolStep([{ id: "toolu_x", name: "Bash", input: { command: "ls" } }]));
+  const repeat = (n: number) =>
+    Array.from({ length: n }, (_, index) => ({ id: `toolu_${index}`, name: "Bash", input: { command: "ls" } }));
+  query.emit(...toolStep(repeat(4)));
 
   const message = failure(await events);
-  assert.match(message.errorMessage ?? "", /did not offer: Bash/);
+  assert.match(message.errorMessage ?? "", /did not offer 4 times/);
 });
 
 test("stops before an overage charge unless the user opted in", async () => {
@@ -430,3 +469,51 @@ test("a silent Claude Code fails the turn instead of hanging Pi", async () => {
   assert.match(message.errorMessage ?? "", /no output from Claude Code within 60ms/);
 });
 
+
+test("the failure log is on by default, and one path selects it", () => {
+  assert.match(logPath({}) ?? "", /claude-directsdk\.jsonl$/);
+  assert.equal(logPath({ [LOG_ENV]: "" }), null);
+  assert.equal(logPath({ [LOG_ENV]: "off" }), null);
+  assert.equal(logPath({ [LOG_ENV]: "/tmp/elsewhere.jsonl" }), "/tmp/elsewhere.jsonl");
+});
+
+test("a failed turn lands in the log with its model and message", async () => {
+  const log = tmpLog("failure");
+  const { fake, deps } = harness();
+  const events = collect(call(deps, [userText("hello")], { env: { [LOG_ENV]: log } }));
+  const query = await fake.nextQuery();
+  await query.waitForUsers(1);
+  query.emit(overageFrame(), ...textStep("hi there"));
+
+  failure(await events);
+  const line = JSON.parse(readFileSync(log, "utf8").trim());
+  assert.equal(line.kind, "billing");
+  assert.equal(line.model, "claude-haiku-4-5-20251001");
+  assert.match(line.message, /usage credits/);
+  assert.equal(line.piSessionId, "conversation");
+});
+
+test("an API rejection carries the upstream request id in the error and the log", async () => {
+  const log = tmpLog("request-id");
+  const { fake, deps } = harness();
+  const events = collect(call(deps, [userText("hello")], { env: { [LOG_ENV]: log } }));
+  const query = await fake.nextQuery();
+  await query.waitForUsers(1);
+  query.emit(apiErrorFrame("API Error: 400 Third-party apps now draw from your extra usage."));
+
+  const message = failure(await events);
+  assert.match(message.errorMessage ?? "", /Third-party apps/);
+  assert.match(message.errorMessage ?? "", /request id req_abc123/);
+  const line = JSON.parse(readFileSync(log, "utf8").trim());
+  assert.equal(line.requestId, "req_abc123");
+});
+
+test("the log rotates instead of growing without bound", () => {
+  const log = tmpLog("rotate");
+  writeFileSync(log, "x".repeat(1024 * 1024));
+  const written = logTransportEvent({ kind: "probe", message: "after rotation" }, { [LOG_ENV]: log });
+  assert.equal(written, log);
+  assert.ok(existsSync(`${log}.1`), "the previous file is kept once");
+  assert.ok(statSync(log).size < 4096, "the live file starts over");
+  assert.match(readFileSync(log, "utf8"), /after rotation/);
+});

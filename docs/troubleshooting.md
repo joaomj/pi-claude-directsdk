@@ -13,7 +13,7 @@
 | The SDK handshake fails or the CLI exits mid-turn | `sdk` | Read the reported CLI path and stderr tail. Update Claude Code or set `CLAUDE_DIRECTSDK_COMMAND` to another build. |
 | A turn used usage credits | `billing` | The turn may already be charged. Later turns stop unless `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS=1` is set. Disable usage credits in the Claude account settings to stay on plan limits. |
 | Claude Code refused a tool Pi offered | `tool` | Read the message. A `system/permission_denied` for a host tool, or a Pi tool server reported as not connected, is a transport fault: the call never reached Pi and the turn stops instead of running without tools. |
-| Claude called a tool Pi did not offer | `tool` | The turn fails. Pi never executes a tool outside the current inventory. Restart the session if this repeats. |
+| Claude called a tool Pi did not offer | `tool` | Pi never executes a tool outside the current inventory. Claude Code answers the call itself and the model usually continues in the same turn, so nothing is required. More than three such calls in one turn fail it as a `tool` error; retry, or give the model the tool it keeps asking for. |
 | Catalog refresh fails | catalog | Read the warning for the source or CLI failure. Open `/model` in interactive Pi and wait for refresh. No pinned fallback is used. |
 | Model excluded from catalog | metadata | Read the warning for the missing field. Update Claude Code if picker metadata is incomplete. Unverified limits and prices are never guessed. |
 | No DirectSDK models on a fresh offline install | catalog | Connect once, start interactive Pi, and open `/model`. Wait for refresh before selecting a model from the command line. |
@@ -24,6 +24,32 @@
 | Request cancelled | `cancelled` | Re-run the request. Cancel interrupts the session, settles any parked tool call without running it, and closes the process. |
 
 Missing CLI, logged-out CLI, and a failed SDK handshake fail before any upstream contact. The messages are actionable and safe to show.
+
+## Finding what failed
+
+A failed or cancelled turn is recorded twice.
+
+**Pi's session transcript** holds the assistant message with `stopReason` `error` or `aborted`, the full `errorMessage`, and a `pi-claude-directsdk/session` diagnostic with the native model, CLI version, Claude session id, and MCP server states. To read the failures of one session:
+
+```sh
+jq -r 'select(.type=="message" and .message.role=="assistant")
+  | select(.message.stopReason=="error" or .message.stopReason=="aborted")
+  | [.timestamp, .message.stopReason,
+     ((.message.diagnostics[]? | select(.type=="pi-claude-directsdk/session") | .details.nativeModel) // "-"),
+     (.message.errorMessage // "")] | @tsv' ~/.pi/agent/sessions/<project>/<session>.jsonl
+```
+
+**The transport log** holds what the transcript does not: the CLI's stderr tail and the upstream request id. It is one JSON line per failure in `~/.pi/agent/logs/claude-directsdk.jsonl`, written only when a turn fails or is cancelled. Read the last entries with `tail -n 5 ~/.pi/agent/logs/claude-directsdk.jsonl | jq .`, or the previous generation in `claude-directsdk.jsonl.1`.
+
+| Setting | Effect |
+|---|---|
+| Unset | `~/.pi/agent/logs/claude-directsdk.jsonl` |
+| `CLAUDE_DIRECTSDK_LOG=/path/to/file.jsonl` | Write to that file instead |
+| `CLAUDE_DIRECTSDK_LOG=` or `CLAUDE_DIRECTSDK_LOG=off` | No log file |
+
+The file is rotated once at 1 MiB: the live file starts over and the previous one is kept as `.1`. Logging never changes the outcome of a turn and never writes credentials or prompt text.
+
+When Claude Code reports an API rejection it could not classify, the error names the provider's text and the upstream request id, for example `API Error: 400 … (request id req_011C…)`. Anthropic support asks for that id first, so include it in a report.
 
 ## Compiled Pi compatibility
 
@@ -53,6 +79,7 @@ If a conversation grows expensive, remember that Pi owns compaction. Claude Code
 | `CLAUDE_DIRECTSDK_CONFIG_DIR` | User | Logged-in config directory. Mapped to `CLAUDE_CONFIG_DIR` for the child and for discovery probes. Never forwarded under its own name. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | User | Token from `claude setup-token` for environments without an interactive login. |
 | `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` | User | Set to `1` to allow turns that Claude Code reports as charged to usage credits. Unset or `0` stops later turns after overage. |
+| `CLAUDE_DIRECTSDK_LOG` | User | Failure log path. Defaults to `~/.pi/agent/logs/claude-directsdk.jsonl`; empty or `off` disables it. See [Finding what failed](#finding-what-failed). |
 | `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, `CLAUDE_CODE_TOTAL_TOKENS_REMINDER` | Provider | Set in the child environment so Pi owns compaction and budgets. |
 | `PI_DIRECTSDK_TEST_UPSTREAM` | Development only | Bypass the subscription environment guard for loopback test fixtures. Never set it in normal subscription use. |
 

@@ -69,6 +69,7 @@ A failed or cancelled call drops the session, because its state after the failur
 | `src/sdk/bridge.ts` | Parks handlers and matches calls to results |
 | `src/sdk/adapter.ts` | Shape checks for SDK frames and MCP results |
 | `src/sdk/channel.ts` | Bounded queues with deadlines |
+| `src/sdk/log.ts` | One JSON line per transport failure, capped and rotated |
 | `src/discovery.ts`, `src/web-catalog.ts`, `src/process.ts` | Catalog probes against the CLI picker and Anthropic documents |
 | `src/models.ts`, `src/billing.ts`, `src/errors.ts` | Native model ids, usage-credit guard, error types |
 
@@ -120,6 +121,10 @@ Claude Code's streamed content blocks are authoritative, because the complete `a
 
 The provider reads `rate_limit_event.rate_limit_info`. When the response reports usage-credit overage and `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` is not enabled, the turn fails with a non-retryable `billing` error after usage is captured. Completed and failed turns carry a `pi-claude-directsdk/session` diagnostic with the native model, CLI version, Claude session id, MCP server states, result subtype, and an estimated native cost that is not the subscription charge.
 
+### Failure records
+
+Every failed or cancelled turn is already visible in Pi's session as an assistant message with `stopReason` `error` or `aborted`, its message, and the `pi-claude-directsdk/session` diagnostic. `src/sdk/log.ts` adds a transport-side record, because the CLI's stderr tail and the upstream request id are not part of that diagnostic. It writes one JSON line per failure to `~/.pi/agent/logs/claude-directsdk.jsonl`: timestamp, error kind, message, native model, CLI version, Claude session id, MCP server states, result subtype, Pi session id, request id, and the last stderr text. The file is rotated once at 1 MiB to `.1`, and the previous generation is replaced rather than accumulated. A successful turn writes nothing. `CLAUDE_DIRECTSDK_LOG` moves the file, and an empty value or `off` disables it. Writing is best-effort: a log failure never changes the outcome of a turn, and no credential or prompt text is logged.
+
 ### Catalog and startup
 
 DirectSDK registers with an empty catalog and no process, socket, timer, or web request at load. Cache-only refresh restores a previously verified snapshot from Pi's model store; live refresh runs after the editor is ready and loads discovery modules asynchronously. A refresh failure reports the error and deletes the snapshot instead of returning pinned models. See [startup.md](startup.md).
@@ -139,4 +144,4 @@ Catalog children run in their own process group and abort kills the whole tree, 
 - No Claude Code process outlives the Pi session that started it.
 - A missing or logged-out CLI fails with an actionable error. See [troubleshooting.md](troubleshooting.md).
 - Only `tool_choice` `auto` and `none` are supported. Grammar and best-effort (`strict: "prefer"`) annotations fall back to normal JSON-schema calling, and required strict (`strict: "require"`) stays rejected.
-- A tool call Pi did not offer, a `system/permission_denied` for an offered tool, and a handshake that reports the Pi tool server as disconnected each fail the turn instead of running without tools.
+- A tool call Pi did not offer is never executed and never blocks the turn: Claude Code answers the call itself and the model continues. More than three such calls in one turn fail it. A `system/permission_denied` for an offered tool, or a handshake that reports the Pi tool server as disconnected, fails the turn instead of running without tools.
