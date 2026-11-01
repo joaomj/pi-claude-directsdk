@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted and implemented on `feat/official-agent-sdk`: transport, offline suite, and real round trip. Not release-qualified.
+Accepted and released in 1.0.0: transport, offline suite, real round trip, and a measured session-reuse run. The unverified environments listed under *Qualification* remain open.
 
 ## Context
 
