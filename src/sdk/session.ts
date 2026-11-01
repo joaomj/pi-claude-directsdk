@@ -228,8 +228,9 @@ export class ClaudeSession {
 
 function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    // Referenced on purpose: nothing else may be pending while the CLI ignores
+    // an interrupt, and an unref'd timer lets the process exit before it fires.
     const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
-    timer.unref?.();
     promise.then(
       (value) => {
         clearTimeout(timer);

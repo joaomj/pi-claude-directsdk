@@ -70,7 +70,8 @@ export class Channel<T> {
         if (index !== -1) this.waiters.splice(index, 1);
         reject(timeoutError(`no output from Claude Code within ${timeoutMs}ms`));
       }, timeoutMs);
-      timer?.unref();
+      // A silent CLI leaves this timer as the only pending work, so it must
+      // keep the process alive; unref'd, node exits before the deadline fires.
       this.waiters.push(waiter);
     });
   }
