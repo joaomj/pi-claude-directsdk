@@ -1,6 +1,6 @@
 # Verification
 
-Verification has two layers. The offline suite runs in under a second and covers the transport's behaviour against a scripted Claude Agent SDK. The real checks run against the installed Claude Code and the installed Pi, and they cost model calls.
+Verification has two layers. The offline suite runs in about a second and covers the transport's behaviour against a scripted Claude Agent SDK. The real checks run against the installed Claude Code and the installed Pi, and they cost model calls.
 
 ## Offline regression suite
 
@@ -61,7 +61,7 @@ The maintainer installation used for the results below:
 
 | Component | Version |
 |---|---|
-| Pi | 1.3.0 |
+| Pi | 1.4.0 |
 | Node | 24.22.1 |
 | Claude Code | 2.1.281 |
 | Claude Agent SDK | 0.3.316 |
@@ -73,7 +73,7 @@ Results for the Agent SDK transport, all on the installation above:
 - `npm run smoke`: tool call `mcp__pi__echo` published to Pi, answered, and continued on the same session. Final answer repeated the tool result. Usage `input 8, output 43, cacheRead 4260`, elapsed 2.85 s.
 - Full Pi run with one tool: answered `0.3.1` from `package.json` in 8 s.
 - Full Pi run with two tools in one turn: answered `0.3.1 2026` in 6 s.
-- `npm test`: 18 of 18 pass.
+- `npm test`: 29 of 29 pass.
 - `npm run measure cancellation`: a cancelled turn returns `aborted`; closing with a parked tool call reaps the CLI in 6.9 s; a `SIGSTOP`ped CLI trips the frame deadline with a `timeout` error; no `claude` process survives.
 - `npm run measure session` and `npm run measure cache`: 98.8 to 98.9 percent cache-read share on continued turns, no cache activity below roughly 4,000 prompt tokens, and 94.9 percent reuse of the instruction prefix after a rebuild.
 - `npm run measure restart`: a new process read back the instruction prefix written by the previous one 309 ms earlier, and rewrote the flattened conversation.

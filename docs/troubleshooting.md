@@ -57,7 +57,7 @@ Version 0.1.7 fixed two compiled-Pi failures for the earlier direct-CLI transpor
 
 The transport itself no longer spawns the helper: the Agent SDK starts Claude Code. Do not set `BUN_BE_BUN` globally.
 
-Follow the [upgrade instructions](../README.md#upgrade), restart Pi, then open `/model` and wait for refresh. In Pi 1.3.0, `pi update --models` does not load this extension.
+Follow the [upgrade instructions](../README.md#upgrade), restart Pi, then open `/model` and wait for refresh. In Pi 1.4.0, `pi update --models` does not load this extension.
 
 ## High token usage
 
