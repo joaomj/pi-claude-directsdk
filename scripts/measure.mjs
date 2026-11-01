@@ -9,6 +9,7 @@
  *   node ... scripts/measure.mjs cancellation   cancel during generation, cancel
  *                                               with a parked tool call, stalled CLI
  *   node ... scripts/measure.mjs quota          what each arm drains from the plan window
+ *   node ... scripts/measure.mjs quota-sweep    which token kind drives the plan window
  *
  * Both modes spend real model calls on the operator's own login. Results are
  * printed as JSON so they can be quoted in the documentation without retyping.
@@ -22,6 +23,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
 import { closeAllSessions, streamClaudeDirectSdk } from "../src/sdk/stream.ts";
+import { readWindows } from "./quota.mjs";
 
 const MODEL = process.env.MEASURE_MODEL ?? "claude-haiku-4-5-20251001";
 const CLI = process.env.CLAUDE_DIRECTSDK_COMMAND ?? "claude";
@@ -817,20 +819,137 @@ async function quotaMode() {
   return report;
 }
 
+/**
+ * Which token kind drains the 5-hour window.
+ *
+ * The endpoint reports whole percent, so each condition runs enough requests to
+ * move the counter by several points and the per-request cost is derived from
+ * that delta. Conditions differ in one variable each: output length, warm
+ * input, and cold input.
+ */
+async function quotaSweepMode() {
+  const report = { model: MODEL, conditions: [], startedAt: new Date().toISOString() };
+
+  const sessionUsed = async () => {
+    const w = await readWindows();
+    return w.session?.usedPercent ?? null;
+  };
+
+  /**
+   * The percentage is eventually consistent. A burst of requests can leave it
+   * unmoved for several minutes: two runs of six requests each read 37 percent
+   * before and after. So a settle waits five minutes before the first read and
+   * keeps reading once a minute while the value has not moved.
+   */
+  const settled = async (previous) => {
+    await new Promise((resolve) => setTimeout(resolve, 300_000));
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const used = await sessionUsed();
+      if (used === null) throw new Error("the usage endpoint returned no session window");
+      if (previous === null || used > previous) return used;
+      log("sweep settle", `still ${used}% after ${5 + attempt} min`);
+    }
+    return previous;
+  };
+
+  const runRequests = async (condition) => {
+    const turns = [];
+    for (const request of condition.requests) {
+      const sessionId = `sweep-${condition.name}-${turns.length}-${Date.now()}`;
+      const turn = await transportTurn(
+        sessionId,
+        [{ role: "user", content: request.prompt, timestamp: now() }],
+        undefined,
+        request.systemPrompt,
+      );
+      turns.push({
+        stopReason: turn.stopReason,
+        ...summarise(turn.usage),
+        answerChars: turn.prompt.length,
+      });
+    }
+    return turns;
+  };
+
+  const only = process.argv[3];
+  const conditions = [
+    {
+      name: "longOutput",
+      why: "tiny prompt, long answers: isolates output tokens",
+      requests: Array.from({ length: 3 }, () => ({
+        prompt: "Write about 400 words about a slow train crossing a plain. No lists.",
+      })),
+    },
+    {
+      name: "warmInput",
+      why: "12k-token instruction block cached after the first request, one line out",
+      requests: Array.from({ length: 10 }, () => ({
+        prompt: "Reply with the single word OK.",
+        systemPrompt: `${pad()}\nYou are Pi. Answer in one line.`,
+      })),
+    },
+    {
+      name: "coldInput",
+      why: "12k-token instruction block with unique bytes every request, one line out",
+      requests: Array.from({ length: 5 }, () => ({
+        prompt: "Reply with the single word OK.",
+        systemPrompt: `Sweep ${randomUUID()}\n${pad()}\nYou are Pi. Answer in one line.`,
+      })),
+    },
+  ].filter((condition) => !only || condition.name === only);
+
+  let previous = await sessionUsed();
+  report.startUsedPercent = previous;
+  log("sweep start", `session used ${previous}%`);
+
+  for (const condition of conditions) {
+    const before = previous;
+    const turns = await runRequests(condition);
+    const after = await settled(before);
+    previous = after;
+    const requests = turns.length;
+    const output = turns.reduce((acc, turn) => acc + turn.output, 0);
+    const uncachedInput = turns.reduce((acc, turn) => acc + turn.input + turn.cacheWrite, 0);
+    const cacheRead = turns.reduce((acc, turn) => acc + turn.cacheRead, 0);
+    const points = after - before;
+    report.conditions.push({
+      name: condition.name,
+      why: condition.why,
+      requests,
+      points,
+      pointsPerRequest: Number((points / requests).toFixed(3)),
+      outputTokens: output,
+      outputPerPoint: points > 0 ? Math.round(output / points) : null,
+      uncachedInputTokens: uncachedInput,
+      uncachedInputPerPoint: points > 0 ? Math.round(uncachedInput / points) : null,
+      cacheReadTokens: cacheRead,
+      turns,
+    });
+    log("sweep condition", condition.name, `points ${points}`, `requests ${requests}`, `output ${output}`, `uncached ${uncachedInput}`, `cacheRead ${cacheRead}`);
+  }
+
+  report.endUsedPercent = previous;
+  closeAllSessions();
+  return report;
+}
+
 const mode = process.argv[2] ?? "session";
 
-const report =
-  mode === "restart-phase2"
-    ? await restartPhase2(process.argv[3])
-    : mode === "cancellation"
-      ? await cancellationMode()
-      : mode === "restart"
-        ? await restartMode()
-        : mode === "compaction"
-          ? await compactionMode()
-          : mode === "quota-probe"
-            ? { probe: await quotaProbe("manual") }
-            : mode === "quota"
-              ? await quotaMode()
-            : await sessionMode({ padded: mode === "cache" });
+const modes = {
+  "restart-phase2": () => restartPhase2(process.argv[3]),
+  cancellation: cancellationMode,
+  restart: restartMode,
+  compaction: compactionMode,
+  "quota-probe": () => quotaProbe("manual"),
+  "quota-sweep": quotaSweepMode,
+  quota: quotaMode,
+  cache: () => sessionMode({ padded: true }),
+  session: () => sessionMode(),
+};
+const run = modes[mode];
+if (!run) {
+  console.error(`unknown mode ${mode}. Modes: ${Object.keys(modes).join(", ")}`);
+  process.exit(2);
+}
+const report = await run();
 console.log(JSON.stringify(report, null, 2));

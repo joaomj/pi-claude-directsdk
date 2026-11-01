@@ -1,0 +1,132 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "conditions": [
+    {
+      "name": "warmInput",
+      "why": "12k-token instruction block cached after the first request, one line out",
+      "requests": 10,
+      "points": 4,
+      "pointsPerRequest": 0.4,
+      "outputTokens": 2035,
+      "outputPerPoint": 509,
+      "uncachedInputTokens": 622,
+      "uncachedInputPerPoint": 156,
+      "cacheReadTokens": 123228,
+      "turns": [
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 161,
+          "cacheRead": 11853,
+          "cacheWrite": 522,
+          "promptTokens": 12385,
+          "totalTokens": 12546,
+          "cacheReadShare": 0.957,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 167,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12552,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 212,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12597,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 175,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12560,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 254,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12639,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 366,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12751,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 238,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12623,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 126,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12511,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 72,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12457,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 264,
+          "cacheRead": 12375,
+          "cacheWrite": 0,
+          "promptTokens": 12385,
+          "totalTokens": 12649,
+          "cacheReadShare": 0.9992,
+          "answerChars": 2
+        }
+      ]
+    }
+  ],
+  "startedAt": "2026-10-31T23:57:01.774Z",
+  "startUsedPercent": 47,
+  "endUsedPercent": 51
+}

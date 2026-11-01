@@ -20,7 +20,7 @@ Raw results are committed beside this document as `docs/measurements/*.json`. Th
 - **Cache use.** A continued session reaches **98.8% cache-read share** once the prompt is large enough to be cacheable. Below roughly 4,000 prompt tokens the transport shows no cache activity at all: no reads and no writes.
 - **Across a restart.** A new process read back **11,887 tokens** of instruction prefix that the previous process had written 309 ms earlier. The conversation itself was rewritten, because a rebuild sends history as one flattened message; `claude -p --resume` read its whole conversation back instead.
 - **Compaction.** Pi compaction cut the prompt from 13,192 to 3,709 tokens, and the first turn after it had **no cache at all** (zero reads, zero writes) and took 3,956 ms against 1,682 ms for an ordinary continued turn.
-- **Plan window.** Three identical conversations drained **5 points** of the 5-hour window on the transport and **5 points** on `claude -p`, although vanilla sent 2.4 times as many prompt tokens. Per token the transport drains about 2.4 times more; per conversation the two are equal.
+- **Plan window.** The endpoint's percentage is not a running total: it read 98% used and later 76% used in the same window while work was only being added, and the same workload charged 4 points once and 1 point the next time. No per-token quota cost can be derived from it. Cached input is not free, though: 123,560 cached tokens moved the figure as much as 62,000 uncached ones.
 - **Cancellation.** Cancelling mid-generation returns `aborted` and keeps the partial text. Closing with a parked tool call reaps the process in about 7 seconds. A frozen CLI trips the frame deadline with a `timeout` error, and no process survives.
 
 ## Method
@@ -121,27 +121,31 @@ Turn 6 is also the slowest of the six, because a rebuild starts a new process an
 
 ## 5. Plan-window drain
 
-The 5-hour and weekly windows are what actually limit a plan. The numbers here come from the footer extension `@joaomj/pi-claude-usage`, which queries the same endpoint Claude Code's `/status` uses and stores whole percentages. Three conversations per arm, the same prompts, run back to back; a probe before, between, and after.
+The 5-hour and weekly windows are what actually limit a plan, so the obvious question is what each kind of token costs there. It cannot be answered from this endpoint.
 
-| Probe | 5-hour remaining | Weekly remaining | Footer |
-|---|---|---|---|
-| Before | 76% | 79% | `claude 5h:76% wk:79%` |
-| After the transport arm | 71% | 79% | `claude 5h:71% wk:79%` |
-| After the vanilla arm | 66% | 78% | `claude 5h:66% wk:78%` |
+**The percentage is not a running total.** It read 98% used at 20:51 UTC and 76% used at 22:49 UTC with the same reset time (01:10 UTC) and the same window, during a period when usage only increased. It moved down while work was being added. The figure therefore behaves like a rolling estimate that lets older usage age out, not like a counter of what has been spent.
 
-| Arm | Conversations | Requests | Prompt tokens | Output tokens | 5-hour drain |
+That makes single-run deltas meaningless, and the replications show it:
+
+| Condition | Requests | Uncached input | Cache reads | Output | Points |
 |---|---|---|---|---|---|
-| Transport | 3 | 9 | 112,392 | 893 | 5 points |
-| `claude -p --resume` | 3 | 9 | 267,397 | 942 | 5 points |
+| `coldInput` run 1 | 5 | 61,968 | 0 | 1,384 | 4 |
+| `coldInput` run 2 | 5 | 62,067 | 0 | 1,101 | 1 |
+| `warmInput` run 1 | 10 | 100 | 123,560 | 2,007 | 4 |
+| `warmInput` run 2 | 10 | 622 | 123,228 | 2,035 | 4 |
+| `longOutput` | 3 | 10,620 | 0 | 2,722 | 1 |
 
-Two readings of the same data:
+The same uncached workload charged 4 points and then 1. The same cached workload charged 4 points twice. Small bursts sometimes moved nothing at all: six requests with 21,180 uncached tokens read 37% before and 37% after.
 
-- **Per conversation, the arms are equal**: about 1.7 points each for a three-turn conversation. A user who runs the same work on either arm spends the same share of the window.
-- **Per prompt token, the transport drains about 2.4 times more**: 4.45 points per 100,000 prompt tokens against 1.87. With one-point resolution, the plausible ratio spans roughly 1.6 to 3.6. This is consistent with the 1.6 to 2.9 times per-token figure reported for headless SDK sessions in [anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074), now observed for this transport.
+Earlier, a three-conversation arm comparison reported 5 points for the transport and 5 for `claude -p --resume`. In light of the above, that equality is what a decaying window produces over a long run, not evidence that the two arms cost the same.
 
-The two arms held request count (9 each) and output volume (893 and 942 tokens) constant while prompt size differed by 2.4 times. The window did not follow prompt size. That points at output tokens or request count as the driver, not at the input the transport saves. It is one sample at one-point resolution, so treat the mechanism as a hypothesis, not a result.
+What is safe to say:
 
-The practical consequence: token efficiency is not quota efficiency. The transport's lower cost estimate comes from sending less input, and the plan window appears not to price input the same way.
+- Cached input is **not** free. A burst of 123,560 cached tokens moved the percentage as much as a burst of 62,000 uncached tokens, in runs where output was nearly equal.
+- Uncached input is charged more per token than cached input, but the ratio is not measurable at one-point resolution against a figure that decays.
+- Nothing here can support a per-token quota cost, and the dollar cost estimate must not be read as plan consumption.
+
+Measuring this properly needs either a per-request accounting source, which the endpoint does not expose, or bursts large enough to dominate the decay. Both are outside what this project can do today.
 
 ## 6. Cancellation and stalls
 
@@ -161,7 +165,7 @@ The 3,000 ms deadline is per frame wait, not per turn. A turn that keeps produci
 
 These numbers answer less than they appear to.
 
-- **Plan-window numbers are whole percentages.** One point is the finest reading the endpoint exposes, so a five-point result carries at least one point of uncertainty and the per-token ratio is a range.
+- **Plan-window numbers cannot be trusted at fine scale.** The percentage is whole, it lags by minutes, and it decays inside the same window. Only bursts large enough to dominate the decay would be measurable, and they were not run.
 - **The label still differs between the arms.** The transport's label is set by the Agent SDK and `claude -p` sets its own. The drain measured here is what the endpoint reports, not a decomposition of how it was charged.
 - **The drain test needs an interactive session.** The footer extension only activates in Pi's TUI, so each probe waits for its cached snapshot to pass five minutes and then opens a detached terminal session. That made the run 15 minutes long and adds a `screen` dependency to `npm run measure quota`.
 - **Nothing else may use the account during the run.** The windows are shared, so background activity on the same login would be counted against whichever arm was running.

@@ -75,7 +75,7 @@ Would hand native tools or workflow control to Claude Code. Rejected because the
 - Claude Code may make multiple upstream attempts within a turn.
 - Cache reuse depends on prompt size. Measured: no cache activity below roughly 4,000 prompt tokens, 98.8 to 98.9 percent cache-read share above it on continued turns, and 94.9 percent reuse of the instruction prefix after a rebuild.
 - Latency per turn is lower than `claude -p --resume` mostly because one process serves every turn (1.1 to 2.1 s against 2.6 to 3.5 s). A close with a parked tool call takes about seven seconds.
-- Subscription usage is neutral per conversation and worse per token. Three identical conversations drained 5 points of the 5-hour window on each arm; the transport sent 2.4 times fewer prompt tokens, so per token it drains about 2.4 times more. The lower cost estimate is not a quota saving.
+- Subscription usage cannot be measured from the quota endpoint: its percentage decays inside the same window, and identical workloads charged 4 points and then 1. The lower cost estimate is therefore not evidence of a quota saving, and cached input is not free in the window.
 - SDK packaging adds dependency and runtime compatibility work.
 - Upstream billing and policy risks remain. This decision is not a claim of Anthropic endorsement.
 

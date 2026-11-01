@@ -59,7 +59,7 @@ Claude Code reports a client label with every request, and subscription usage is
 
 DirectSDK does not set that label. The Agent SDK starts the process and supplies it, so the previous custom `pi-claude-directsdk` label is gone.
 
-Measured on this transport, the per-token figure holds and the per-conversation effect does not. Three identical conversations drained 5 points of the 5-hour window on DirectSDK and 5 points on `claude -p --resume`, while DirectSDK sent 112,392 prompt tokens against vanilla's 267,397. Per conversation the two are equal; per prompt token DirectSDK drains about 2.4 times more. Sending less input therefore does not save window, and the lower cost estimate should not be read as a quota saving. See [Measurements](measurements.md).
+The quota figure Claude Code reports is not a running total. Measured here, it read 98 percent used and later 76 percent used inside the same window while work was only being added, and the same workload charged 4 points once and 1 point the next time. So no per-token quota cost can be derived from it, and the dollar cost estimate must not be read as plan consumption. Cached input is not free in the window, though: 123,560 cached tokens moved the figure as much as 62,000 uncached ones. See [Measurements](measurements.md).
 
 The usage-credit guard below is the backstop if Anthropic classifies these requests as third-party traffic. It stops later turns, but not the first charged one.
 

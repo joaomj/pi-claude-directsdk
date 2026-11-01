@@ -1,0 +1,77 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "conditions": [
+    {
+      "name": "coldInput",
+      "why": "12k-token instruction block with unique bytes every request, one line out",
+      "requests": 5,
+      "points": 1,
+      "pointsPerRequest": 0.2,
+      "outputTokens": 1101,
+      "outputPerPoint": 1101,
+      "uncachedInputTokens": 62067,
+      "uncachedInputPerPoint": 62067,
+      "cacheReadTokens": 0,
+      "turns": [
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 252,
+          "cacheRead": 0,
+          "cacheWrite": 12401,
+          "promptTokens": 12411,
+          "totalTokens": 12663,
+          "cacheReadShare": 0,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 259,
+          "cacheRead": 0,
+          "cacheWrite": 12404,
+          "promptTokens": 12414,
+          "totalTokens": 12673,
+          "cacheReadShare": 0,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 211,
+          "cacheRead": 0,
+          "cacheWrite": 12404,
+          "promptTokens": 12414,
+          "totalTokens": 12625,
+          "cacheReadShare": 0,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 181,
+          "cacheRead": 0,
+          "cacheWrite": 12406,
+          "promptTokens": 12416,
+          "totalTokens": 12597,
+          "cacheReadShare": 0,
+          "answerChars": 2
+        },
+        {
+          "stopReason": "stop",
+          "input": 10,
+          "output": 198,
+          "cacheRead": 0,
+          "cacheWrite": 12402,
+          "promptTokens": 12412,
+          "totalTokens": 12610,
+          "cacheReadShare": 0,
+          "answerChars": 2
+        }
+      ]
+    }
+  ],
+  "startedAt": "2026-11-01T00:02:33.549Z",
+  "startUsedPercent": 51,
+  "endUsedPercent": 52
+}
