@@ -16,6 +16,12 @@ export const CONFIG_DIR_ENV = "CLAUDE_DIRECTSDK_CONFIG_DIR";
 /** Claude Code executable override. */
 export const COMMAND_ENV = "CLAUDE_DIRECTSDK_COMMAND";
 
+/** User override for the client label the child reports. */
+export const ENTRYPOINT_ENV = "CLAUDE_DIRECTSDK_ENTRYPOINT";
+
+/** Report this client instead of the Agent SDK's `sdk-ts` label. */
+export const DEFAULT_ENTRYPOINT = "pi-claude-directsdk";
+
 const CONFLICTING_API_VARS = [
   "ANTHROPIC_API_KEY",
   "ANTHROPIC_AUTH_TOKEN",
@@ -52,6 +58,24 @@ export function checkEnvConflicts(env: NodeJS.ProcessEnv): string[] {
 }
 
 /**
+ * Client label for the child. An inherited label is replaced, because a Pi
+ * started from inside another Claude client would otherwise report that
+ * client's identity. An empty override leaves the label to the CLI.
+ */
+function childEntrypoint(env: NodeJS.ProcessEnv): string | undefined {
+  const override = env[ENTRYPOINT_ENV];
+  if (override === undefined) return DEFAULT_ENTRYPOINT;
+  if (override === "") return undefined;
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(override)) {
+    throw new Error(
+      `${ENTRYPOINT_ENV} must be 1-64 characters of letters, digits, dot, underscore, or hyphen; ` +
+        `unset it for ${DEFAULT_ENTRYPOINT}, or set it to an empty string to let Claude Code label the session`,
+    );
+  }
+  return override;
+}
+
+/**
  * Child environment for the SDK-spawned Claude Code process.
  *
  * The SDK replaces the subprocess environment entirely, so the full merged
@@ -75,7 +99,13 @@ export function buildChildEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   env["DISABLE_COMPACT"] = "1";
   // Pi owns budgets; a native replayed reminder would invalidate the prompt prefix.
   env["CLAUDE_CODE_TOTAL_TOKENS_REMINDER"] = "off";
-  // The SDK labels the session; a custom label is deliberately not carried over.
-  delete env["CLAUDE_CODE_ENTRYPOINT"];
+  // The SDK otherwise labels the child `sdk-ts`, which the plan window meters
+  // faster than a client label. Replace an inherited label as well.
+  const entrypoint = childEntrypoint(baseEnv);
+  if (entrypoint) {
+    env["CLAUDE_CODE_ENTRYPOINT"] = entrypoint;
+  } else {
+    delete env["CLAUDE_CODE_ENTRYPOINT"];
+  }
   return env;
 }
