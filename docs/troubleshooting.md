@@ -77,13 +77,14 @@ If a conversation grows expensive, remember that Pi owns compaction. Claude Code
 |---|---|---|
 | `CLAUDE_DIRECTSDK_COMMAND` | User | Override the `claude` executable path or argv head. Used by `resolveClaude`. |
 | `CLAUDE_DIRECTSDK_CONFIG_DIR` | User | Logged-in config directory. Mapped to `CLAUDE_CONFIG_DIR` for the child and for discovery probes. Never forwarded under its own name. |
+| `CLAUDE_DIRECTSDK_ENTRYPOINT` | User | Client label for the child. Defaults to `pi-claude-directsdk`; empty leaves the Agent SDK's `sdk-ts` label. 1-64 letters, digits, dot, underscore, or hyphen. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | User | Token from `claude setup-token` for environments without an interactive login. |
 | `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` | User | Set to `1` to allow turns that Claude Code reports as charged to usage credits. Unset or `0` stops later turns after overage. |
 | `CLAUDE_DIRECTSDK_LOG` | User | Failure log path. Defaults to `~/.pi/agent/logs/claude-directsdk.jsonl`; empty or `off` disables it. See [Finding what failed](#finding-what-failed). |
 | `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, `CLAUDE_CODE_TOTAL_TOKENS_REMINDER` | Provider | Set in the child environment so Pi owns compaction and budgets. |
 | `PI_DIRECTSDK_TEST_UPSTREAM` | Development only | Bypass the subscription environment guard for loopback test fixtures. Never set it in normal subscription use. |
 
-The client label Claude Code reports is now set by the Agent SDK. The former `CLAUDE_DIRECTSDK_ENTRYPOINT` override is gone, along with the inherited label it replaced. See [usage.md](usage.md#plan-usage-metering).
+The client label defaults to `pi-claude-directsdk` and replaces an inherited label. Set `CLAUDE_DIRECTSDK_ENTRYPOINT` to another 1-64 character label, or to an empty string to leave the Agent SDK's `sdk-ts` label. A custom label still needs the docs-pointer replacement described in [usage.md](usage.md#prompt-acceptance-and-plan-billing). See [usage.md](usage.md#plan-usage-metering).
 
 ## Subscription guard
 

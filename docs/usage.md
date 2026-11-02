@@ -29,6 +29,7 @@ The Agent SDK and the MCP server load on the first Claude request. See [docs/sta
 |---|---|
 | `CLAUDE_DIRECTSDK_COMMAND` | Override the `claude` executable path. |
 | `CLAUDE_DIRECTSDK_CONFIG_DIR` | Point at a logged-in CLI config directory. Forwarded as `CLAUDE_CONFIG_DIR`. |
+| `CLAUDE_DIRECTSDK_ENTRYPOINT` | Client label the child reports. Defaults to `pi-claude-directsdk`; empty leaves the Agent SDK's `sdk-ts` label. 1-64 letters, digits, dot, underscore, or hyphen. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Supply a token from `claude setup-token` in the environment Pi runs in. |
 | `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` | Set to `1` to allow turns that Claude Code reports as charged to usage credits. Unset or `0` stops later turns after an overage charge. |
 | `CLAUDE_DIRECTSDK_LOG` | Failure log path. Defaults to `~/.pi/agent/logs/claude-directsdk.jsonl`; empty or `off` disables it. |
@@ -56,7 +57,7 @@ See [docs/troubleshooting.md](troubleshooting.md) for login and environment erro
 
 ## Prompt acceptance and plan billing
 
-Claude Code labels every request with a client label. This transport runs the user's Claude Code through the Agent SDK, so the label is the SDK's own, and Anthropic applies its third-party app rules to that label. A request whose system prompt lists another agent harness's documentation is refused:
+Claude Code labels every request with a client label. DirectSDK reports `pi-claude-directsdk` by default, replacing any label inherited from the launching environment, and Anthropic applies its third-party app rules to that label. A request whose system prompt lists another agent harness's documentation is refused:
 
 ```
 API Error: 400 Third-party apps now draw from your extra usage, not your plan limits.
@@ -64,7 +65,7 @@ API Error: 400 Third-party apps now draw from your extra usage, not your plan li
 
 Pi's default `<docs>` section names Pi's documentation files, so it is refused. Measured: 6 of 6 requests refused with the section, accepted with the section replaced by a pointer to the same directory.
 
-While a DirectSDK model is active the extension replaces that section with a one-line pointer. Other providers keep Pi's prompt, and a custom or forced prompt is left alone because it has no Pi sections to change.
+While a DirectSDK model is active the extension replaces that section with a one-line pointer. The custom label does not remove this requirement; the replacement is what keeps the request on plan limits. Other providers keep Pi's prompt, and a custom or forced prompt is left alone because it has no Pi sections to change.
 
 The accepted wording is undocumented and can change. After a Pi or Claude Code update, send one real turn from an interactive session; a short prompt does not test this, because it is accepted even when Pi's full prompt is refused. See [Testing](testing.md).
 
@@ -72,7 +73,7 @@ The accepted wording is undocumented and can change. After a Pi or Claude Code u
 
 Claude Code reports a client label with every request, and subscription usage is metered against that label. Headless SDK sessions have been reported to consume the 5-hour window roughly 1.6 to 2.9 times faster per token than the interactive CLI for the same work; see [anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074) for the measurements and for Anthropic's silence on whether the difference is intended.
 
-DirectSDK does not set that label. The Agent SDK starts the process and supplies it, so the previous custom `pi-claude-directsdk` label is gone.
+DirectSDK reports `pi-claude-directsdk` by default, which is treated as a client label rather than the Agent SDK's `sdk-ts` label. Set `CLAUDE_DIRECTSDK_ENTRYPOINT` to another 1-64 character label to change it; an empty value leaves the label to the Agent SDK, which reports `sdk-ts` and returns the session to the faster-draining bucket. Anthropic can reclassify an unknown label as third-party traffic, so the usage-credit guard remains the backstop.
 
 The quota figure Claude Code reports is not a running total. Measured here, it read 98 percent used and later 76 percent used inside the same window while work was only being added, and the same workload charged 4 points once and 1 point the next time. So no per-token quota cost can be derived from it, and the dollar cost estimate must not be read as plan consumption. Cached input is not free in the window, though: 123,560 cached tokens moved the figure as much as 62,000 uncached ones.
 

@@ -97,7 +97,7 @@ Every session starts with `tools: []`, so Claude Code has no native tool; `setti
 `src/env.ts` is the only place that reads the launching environment.
 
 - `checkEnvConflicts` rejects `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and `CLAUDE_CODE_USE_FOUNDRY`, because any of them would silently move the request to another billing route. `PI_DIRECTSDK_TEST_UPSTREAM=1` is the documented bypass for loopback fixtures.
-- `buildChildEnv` maps `CLAUDE_DIRECTSDK_CONFIG_DIR` to `CLAUDE_CONFIG_DIR`, deletes `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_MAX_RETRIES`, and `CLAUDE_CODE_ENTRYPOINT`, and sets `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, and `CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off`. The SDK supplies the session label.
+- `buildChildEnv` maps `CLAUDE_DIRECTSDK_CONFIG_DIR` to `CLAUDE_CONFIG_DIR`, deletes `ANTHROPIC_BASE_URL` and `CLAUDE_CODE_MAX_RETRIES`, sets `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, and `CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off`, and reports `CLAUDE_CODE_ENTRYPOINT=pi-claude-directsdk`, replacing any inherited label. `CLAUDE_DIRECTSDK_ENTRYPOINT` overrides it; an empty value removes the label and lets the Agent SDK supply `sdk-ts`.
 
 ### Session lifecycle
 
