@@ -155,7 +155,7 @@ function toolChangeModels(page: string): Set<string> {
   const text = page.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
   // Model names carry version dots ("Claude Haiku 5.5"), so a sentence-ending
   // period is one that is not followed by a digit.
-  const availability = /This feature is available on ((?:[^.]|\.\d)+)\./.exec(text)?.[1];
+  const availability = /Mid-conversation system messages are available on ((?:[^.]|\.\d)+)\./.exec(text)?.[1];
   if (!availability) throw new Error("missing mid-conversation model availability");
   if (!/Mid-conversation tool changes.{0,80}are in beta on the same models/.test(text)) {
     throw new Error("missing mid-conversation tool change availability");
