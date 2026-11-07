@@ -23,8 +23,6 @@ SEEN_LIMIT="${SEEN_LIMIT:-400}"
 MAX_CANDIDATES="${MAX_CANDIDATES:-250}"
 MAX_REPORTED="${MAX_REPORTED:-15}"
 FIRST_RUN_MAX_REPORTED="${FIRST_RUN_MAX_REPORTED:-60}"
-CLI_PACKAGE="${CLI_PACKAGE:-@anthropic-ai/claude-code}"
-CLI_RANGE_SOURCE="${CLI_RANGE_SOURCE:-src/models.ts}"
 
 # Identifiers this repository writes or reads. Rare enough to stand alone.
 GATE_TOKENS=(
@@ -78,7 +76,7 @@ find_tracker() {
 }
 
 issue_number="$(find_tracker)"
-state='{"lastScan":"","seen":[],"lastCliVersion":""}'
+state='{"lastScan":"","seen":[]}'
 if [[ -n "$issue_number" ]]; then
   gh issue view "$issue_number" --repo "$TRACKER_REPO" --json body --jq .body >"$TMP/body.md"
   extracted="$(sed -n 's/.*<!-- upstream-watch-state \(.*\) -->.*/\1/p' "$TMP/body.md" | head -1)"
@@ -91,7 +89,6 @@ if [[ -n "$issue_number" ]]; then
   state="$extracted"
 fi
 last_scan="$(jq -r '.lastScan // ""' <<<"$state")"
-last_cli="$(jq -r '.lastCliVersion // ""' <<<"$state")"
 seen_json="$(jq -c '(.seen // []) | map(tonumber)' <<<"$state")"
 
 if [[ -n "$last_scan" ]]; then
@@ -151,29 +148,6 @@ while IFS=$'\t' read -r number tier title; do
   fi
 done < <(jq -r '.[] | [.number, .tier, (.title | gsub("[\t\n]"; " "))] | @tsv' "$TMP/window.json")
 
-# --- release check ----------------------------------------------------------
-
-cli_range=""
-if [[ -f "$CLI_RANGE_SOURCE" ]]; then
-  cli_range="$(grep -o 'QUALIFIED_CLI_RANGE = "[^"]*"' "$CLI_RANGE_SOURCE" | sed 's/.*= "//; s/"$//')"
-fi
-latest_cli="$(curl -fsS "https://registry.npmjs.org/$CLI_PACKAGE/latest" 2>/dev/null | jq -r '.version // ""' || true)"
-release_line=""
-if [[ -n "$latest_cli" && "$latest_cli" != "$last_cli" ]]; then
-  if [[ -n "$cli_range" ]]; then
-    upper="$(sed 's/.*<//' <<<"$cli_range")"
-    lower="$(sed 's/.*>=\([0-9.]*\).*/\1/' <<<"$cli_range")"
-    if [[ "$(printf '%s\n%s\n' "$upper" "$latest_cli" | sort -V | tail -1)" == "$latest_cli" ]] ||
-      [[ "$(printf '%s\n%s\n' "$lower" "$latest_cli" | sort -V | head -1)" == "$latest_cli" && "$latest_cli" != "$lower" ]]; then
-      release_line="- npm publication of \`$CLI_PACKAGE\` is at \`$latest_cli\`, outside the qualified range \`$cli_range\`. Re-verify before widening the range."
-    else
-      release_line="- npm publication of \`$CLI_PACKAGE\` is at \`$latest_cli\`, inside the qualified range \`$cli_range\`."
-    fi
-  else
-    release_line="- npm publication of \`$CLI_PACKAGE\` is at \`$latest_cli\`; the qualified range could not be read from \`$CLI_RANGE_SOURCE\`."
-  fi
-fi
-
 # --- report -----------------------------------------------------------------
 
 total_findings="$(awk -F'\t' 'NF' "$TMP/findings.tsv" | wc -l | tr -d ' ')"
@@ -204,11 +178,6 @@ emit_rows() { # $1 = matching rows of findings.tsv
     emit_rows "$findings_b"
     echo
   fi
-  if [[ -n "$release_line" ]]; then
-    echo "### Claude Code release"
-    echo "$release_line"
-    echo
-  fi
   skipped=$(( total_findings - ${#reported[@]} ))
   if (( skipped > 0 )); then
     echo "_$skipped matching item(s) were not listed. Search the upstream tracker manually if that matters._"
@@ -224,10 +193,10 @@ emit_rows() { # $1 = matching rows of findings.tsv
 reported_json="$(printf '%s\n' "${reported[@]+"${reported[@]}"}" | jq -R 'select(length>0) | tonumber' | jq -s -c 'unique')"
 new_seen="$(jq -c -n --argjson seen "$seen_json" --argjson reported "$reported_json" \
   --argjson limit "$SEEN_LIMIT" '($seen + $reported | unique | sort) as $all | $all | .[-$limit:]' <<<"null")"
-new_state="$(jq -c -n --arg lastScan "$(date -u +%F)" --arg lastCliVersion "${latest_cli:-$last_cli}" \
-  --argjson seen "$new_seen" '{lastScan: $lastScan, seen: $seen, lastCliVersion: $lastCliVersion}')"
+new_state="$(jq -c -n --arg lastScan "$(date -u +%F)" \
+  --argjson seen "$new_seen" '{lastScan: $lastScan, seen: $seen}')"
 
-if (( ${#reported[@]} == 0 )) && [[ -z "$release_line" ]]; then
+if (( ${#reported[@]} == 0 )); then
   echo "No new findings since $since."
   if [[ "$DRY_RUN" != "1" && -n "$issue_number" ]]; then
     gh issue edit "$issue_number" --repo "$TRACKER_REPO" --body "$(state_body "$new_state")" >/dev/null
