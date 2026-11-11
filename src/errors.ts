@@ -8,7 +8,6 @@ export type DirectSdkErrorKind =
   | "tool"
   | "incomplete"
   | "native"
-  | "upstream"
   | "billing"
   | "timeout"
   | "cancelled";
@@ -73,10 +72,6 @@ export function incompleteError(detail: string): DirectSdkError {
 
 export function nativeError(detail: string): DirectSdkError {
   return new DirectSdkError("native", `Native request failed: ${detail}`);
-}
-
-export function upstreamError(detail: string): DirectSdkError {
-  return new DirectSdkError("upstream", `Incomplete upstream response: ${detail}`);
 }
 
 export function timeoutError(detail: string): DirectSdkError {
