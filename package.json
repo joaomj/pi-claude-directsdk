@@ -45,12 +45,18 @@
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*"
   },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
   "allowScripts": {
     "@google/genai@2.21.0": true,
     "protobufjs@7.6.6": true
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "0.87.1",
+    "@earendil-works/pi-coding-agent": ">=1.5.0",
     "typescript": "^5.9.3"
   },
   "scripts": {

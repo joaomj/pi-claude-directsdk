@@ -61,6 +61,24 @@ npm run smoke          # two real model calls against your own Claude Code login
 
 `npm run smoke` proves the tool round trip on the real binary: the first call must return a tool call, and the second must answer from the tool result Pi supplies. It closes the session it opened. Both commands are described in [testing.md](docs/testing.md).
 
+## Use from a pi-ai application
+
+An application that calls pi-ai directly, without Pi, can register the provider itself. Only the Pi extension entry needs `@earendil-works/pi-coding-agent`, so the package does not install it for such applications.
+
+```ts
+import { createModels } from "@earendil-works/pi-ai/models";
+import { createDirectSdkProvider } from "pi-claude-directsdk/src/provider.js";
+import { closeAllSessions } from "pi-claude-directsdk/src/sdk/stream.js";
+
+const models = createModels();
+models.setProvider(createDirectSdkProvider(message => console.error(message)));
+await models.refresh({ providers: ["claude-directsdk"] });
+// ...
+closeAllSessions(); // at shutdown, so no Claude Code process outlives the application
+```
+
+The package ships TypeScript source. Node does not strip types inside `node_modules`, so bundle the package into the application, for example with esbuild. The Pi extension also replaces the documentation section of Pi's system prompt; an application sends its own system prompt and does not get that replacement.
+
 ## Upgrade
 
 ```sh
