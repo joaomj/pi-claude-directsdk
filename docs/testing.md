@@ -55,19 +55,9 @@ It is also the only check that proves prompt acceptance. Anthropic refuses an SD
 
 Use `pi install ./` instead of `-e` to keep the checkout loaded across invocations. Neither form publishes a release or changes the package version.
 
-## Verified environments
+## Measured results
 
-The maintainer installation used for the results below:
-
-| Component | Version |
-|---|---|
-| Pi | 1.4.0 |
-| Node | 24.22.1 |
-| Claude Code | 2.1.281 |
-| Claude Agent SDK | 0.3.316 |
-| Model under test | `claude-haiku-4-5-20251001` |
-
-Results for the Agent SDK transport, all on the installation above:
+Results for the Agent SDK transport:
 
 - SDK handshake with native tools off, settings off, and the host tool server configured: complete in 671 ms, no model call.
 - `npm run smoke`: tool call `mcp__pi__echo` published to Pi, answered, and continued on the same session. Final answer repeated the tool result. Usage `input 8, output 43, cacheRead 4260`, elapsed 2.85 s.

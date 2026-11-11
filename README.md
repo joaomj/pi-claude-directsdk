@@ -10,7 +10,7 @@ One Claude Code session serves each Pi conversation. Assistant output streams th
 
 ## Requirements
 
-- Pi. The maintainer installation runs Pi 1.4.0; see [verification details](docs/testing.md#verified-environments).
+- Pi.
 - Node 20 or later for Node-based Pi installations and local development. Compiled Pi uses its bundled runtime.
 - Claude Code installed and reachable. This project pins no version range: the version reported in the SDK init frame is recorded in the failure log, and a CLI that cannot complete the handshake fails with the CLI's own message. Claude Code 2.1.281 is the version under test.
 - A Claude paid plan. The free plan excludes the CLI.
