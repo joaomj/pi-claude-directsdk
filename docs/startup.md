@@ -12,7 +12,7 @@ DirectSDK registers synchronously with an empty catalog. The extension factory s
 - Successful refresh persists verified metadata. Repeated refreshes reuse it for 15 minutes unless forced.
 - Missing metadata excludes the affected model with a warning. A refresh failure reports the error and deletes the snapshot. There is no pinned fallback.
 
-On a fresh installation, start interactive Pi, open `/model`, and wait for DirectSDK catalog refresh. Only then select a DirectSDK model from the command line. In Pi 1.4.0, `pi update --models` refreshes catalogs without loading this extension and does not initialize DirectSDK. A saved snapshot supports later offline and non-interactive invocations.
+On a fresh installation, start interactive Pi, open `/model`, and wait for DirectSDK catalog refresh. Only then select a DirectSDK model from the command line. `pi update --models` refreshes catalogs without loading extensions, so it does not initialize DirectSDK. A saved snapshot supports later offline and non-interactive invocations.
 
 ## Lazy loading
 

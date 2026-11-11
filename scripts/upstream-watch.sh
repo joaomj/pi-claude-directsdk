@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Report new upstream Claude Code issues that touch the surfaces this extension
-# calls: the environment in `buildChildEnv`, the stream-json fields the provider
-# reads, the flags in `buildArgv`, and the billing identity label.
+# calls: the environment in `buildChildEnv`, the SDK frames the provider reads,
+# the SDK options in `src/sdk/options.ts`, and the billing identity label.
 #
 # GitHub search normalizes hyphens and underscores, so a search hit is only a
 # recall step. Relevance is decided on the raw title and body: either a literal

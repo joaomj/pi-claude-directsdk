@@ -66,7 +66,8 @@ A failed call drops the session, because its state after the failure is unknown.
 | `extensions/claude-directsdk/index.ts` | Registers the provider, the API handler, the prompt adjustment, and shutdown cleanup |
 | `src/provider.ts` | Catalog state, refresh lifecycle, and the Pi-facing stream factory |
 | `src/lazy-stream.ts` | Defers the SDK import until the first request |
-| `src/env.ts` | The only reader of the launching environment; guards, child environment |
+| `src/env.ts` | Environment guards and the model-call child environment |
+| `src/setup.ts` | Locates the `claude` executable and builds the discovery child environment |
 | `src/sdk/stream.ts` | Session registry, one Pi turn, frame to event conversion |
 | `src/sdk/session.ts` | One streaming-input query, frame deadlines, cancellation, close |
 | `src/sdk/options.ts` | Isolation options for the child |
@@ -94,10 +95,11 @@ Every session starts with `tools: []`, so Claude Code has no native tool; `setti
 
 ### Environment boundary
 
-`src/env.ts` is the only place that reads the launching environment.
+`src/env.ts` checks the launching environment and builds the environment of the model-call child. `src/sdk/log.ts` reads `CLAUDE_DIRECTSDK_LOG`, and `src/setup.ts` builds the discovery child's environment.
 
 - `checkEnvConflicts` rejects `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and `CLAUDE_CODE_USE_FOUNDRY`, because any of them would silently move the request to another billing route. `PI_DIRECTSDK_TEST_UPSTREAM=1` is the documented bypass for loopback fixtures.
-- `buildChildEnv` maps `CLAUDE_DIRECTSDK_CONFIG_DIR` to `CLAUDE_CONFIG_DIR`, deletes `ANTHROPIC_BASE_URL` and `CLAUDE_CODE_MAX_RETRIES`, sets `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, and `CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off`, and reports `CLAUDE_CODE_ENTRYPOINT=pi-claude-directsdk`, replacing any inherited label. `CLAUDE_DIRECTSDK_ENTRYPOINT` overrides it; an empty value removes the label and lets the Agent SDK supply `sdk-ts`.
+- `buildChildEnv` maps `CLAUDE_DIRECTSDK_CONFIG_DIR` to `CLAUDE_CONFIG_DIR`, deletes `ANTHROPIC_BASE_URL` and `CLAUDE_CODE_MAX_RETRIES`, sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, and `CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off`, and reports `CLAUDE_CODE_ENTRYPOINT=pi-claude-directsdk`, replacing any inherited label. `CLAUDE_DIRECTSDK_ENTRYPOINT` overrides it; an empty value removes the label and lets the Agent SDK supply `sdk-ts`.
+- `setupChildEnv` maps `CLAUDE_DIRECTSDK_CONFIG_DIR` the same way for discovery probes and sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_TELEMETRY`, and `DISABLE_ERROR_REPORTING`.
 
 ### Session lifecycle
 

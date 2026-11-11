@@ -57,7 +57,7 @@ Version 0.1.7 fixed two compiled-Pi failures for the earlier direct-CLI transpor
 
 The transport itself no longer spawns the helper: the Agent SDK starts Claude Code. Do not set `BUN_BE_BUN` globally.
 
-Follow the [upgrade instructions](../README.md#upgrade), restart Pi, then open `/model` and wait for refresh. In Pi 1.4.0, `pi update --models` does not load this extension.
+Follow the [upgrade instructions](../README.md#upgrade), restart Pi, then open `/model` and wait for refresh. `pi update --models` does not load extensions, so it does not refresh this catalog.
 
 ## High token usage
 
@@ -81,7 +81,9 @@ If a conversation grows expensive, remember that Pi owns compaction. Claude Code
 | `CLAUDE_CODE_OAUTH_TOKEN` | User | Token from `claude setup-token` for environments without an interactive login. |
 | `CLAUDE_DIRECTSDK_ALLOW_USAGE_CREDITS` | User | Set to `1` to allow turns that Claude Code reports as charged to usage credits. Unset or `0` stops later turns after overage. |
 | `CLAUDE_DIRECTSDK_LOG` | User | Failure log path. Defaults to `~/.pi/agent/logs/claude-directsdk.jsonl`; empty or `off` disables it. See [Finding what failed](#finding-what-failed). |
-| `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, `CLAUDE_CODE_TOTAL_TOKENS_REMINDER` | Provider | Set in the child environment so Pi owns compaction and budgets. |
+| `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`, `CLAUDE_CODE_TOTAL_TOKENS_REMINDER` | Provider | Set in the model-call child environment so Pi owns compaction and budgets. |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | Provider | Set in the model-call and discovery child environments. |
+| `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING` | Provider | Set in the discovery child environment. |
 | `PI_DIRECTSDK_TEST_UPSTREAM` | Development only | Bypass the subscription environment guard for loopback test fixtures. Never set it in normal subscription use. |
 
 The client label defaults to `pi-claude-directsdk` and replaces an inherited label. Set `CLAUDE_DIRECTSDK_ENTRYPOINT` to another 1-64 character label, or to an empty string to leave the Agent SDK's `sdk-ts` label. A custom label still needs the docs-pointer replacement described in [usage.md](usage.md#prompt-acceptance-and-plan-billing). See [usage.md](usage.md#plan-usage-metering).

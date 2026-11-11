@@ -19,6 +19,8 @@ The suite uses `node:test` and needs no credentials. A scripted runtime stands i
 - An offered tool denied by Claude Code, a Pi tool server that failed to connect, a tool Pi never offered (Claude Code answers it, the turn continues, and four in one turn fail it), an overage charge refused and allowed, a reply that merely mentions billing, and a silent CLI.
 - The failure log: one JSON line per failed turn with kind, model, session, and message; the upstream request id on an API rejection; the default path, the override, and the disable value; and rotation at the cap. The suite points `CLAUDE_DIRECTSDK_LOG` at a temporary file, so it never writes the log of the machine it runs on.
 - A signature-only thinking block dropped from the published message.
+- The client label: the default replaces an inherited label, the override sets it, an empty override leaves it to the CLI, and an unusable value names the variable and the fix.
+- The prompt: a DirectSDK turn sends a docs pointer instead of Pi's `<docs>` section, another provider keeps Pi's section, and a custom or forced prompt is left alone.
 
 The suite proves Pi-facing behaviour. It does not prove real generation, real CLI acceptance, or real cache reuse; the real round trip and the full Pi run below cover those on the real binary.
 
@@ -63,7 +65,7 @@ Results for the Agent SDK transport:
 - `npm run smoke`: tool call `mcp__pi__echo` published to Pi, answered, and continued on the same session. Final answer repeated the tool result. Usage `input 8, output 43, cacheRead 4260`, elapsed 2.85 s.
 - Full Pi run with one tool: answered `0.3.1` from `package.json` in 8 s.
 - Full Pi run with two tools in one turn: answered `0.3.1 2026` in 6 s.
-- `npm test`: 29 of 29 pass.
+- `npm test`: 32 of 32 pass.
 - `npm run measure cancellation`: a cancelled turn returns `aborted`; closing with a parked tool call reaps the CLI in 6.9 s; a `SIGSTOP`ped CLI trips the frame deadline with a `timeout` error; no `claude` process survives.
 - `npm run measure session` and `npm run measure cache`: 98.8 to 98.9 percent cache-read share on continued turns, no cache activity below roughly 4,000 prompt tokens, and 94.9 percent reuse of the instruction prefix after a rebuild.
 - `npm run measure restart`: a new process read back the instruction prefix written by the previous one 309 ms earlier, and rewrote the flattened conversation.
