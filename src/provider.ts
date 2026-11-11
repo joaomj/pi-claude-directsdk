@@ -28,8 +28,10 @@ export function createDirectSdkProvider(report: (message: string) => void): Prov
       if (!context.allowNetwork) {
         if (!models.length && context.stored?.checkedAt) {
           await context.publish({ update: () => {
-            models = context.stored!.models.map(model => ({ ...model,
-              name: `${model.name} (last verified snapshot)` }));
+            // pi-ai 1.x stores models of every type; this provider only lists chat models.
+            models = context.stored!.models
+              .filter((model): model is Model<Api> => !("type" in model) || model.type === "chat")
+              .map(model => ({ ...model, name: `${model.name} (last verified snapshot)` }));
             refreshedAt = context.stored!.checkedAt!;
           } });
         }
